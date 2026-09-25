@@ -3,6 +3,7 @@ import { formatMoney, PRICE_UNIT_LABELS, type PriceUnit } from "@pawguild/shared
 import { Link, useParams } from "react-router";
 import { get, type Reservation } from "../api";
 import { useCan } from "../auth";
+import { KennelAssignment } from "../components/KennelAssignment";
 import { StatusActions } from "../components/StatusActions";
 import { ErrorAlert, Loading, PageHeader, Panel, ReservationStatusBadge } from "../components/ui";
 import { formatDateTime, formatRange } from "../units";
@@ -41,6 +42,7 @@ export function ReservationDetailPage() {
               </table>
             </div>
           </Panel>
+          <KennelAssignment reservation={r} />
           {r.notes && <Panel title="Notes"><p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{r.notes}</p></Panel>}
           <History entityType="reservation" entityId={r.id} />
         </div>

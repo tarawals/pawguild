@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
 import { RequireAuth } from "./auth";
 import { Layout } from "./components/Layout";
+import { CapacityPage } from "./pages/Capacity";
 import { CustomerDetailPage } from "./pages/CustomerDetail";
 import { CustomerFormPage } from "./pages/CustomerForm";
 import { CustomersPage } from "./pages/Customers";
@@ -44,6 +45,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="reservations/:id" element={<ReservationDetailPage />} />
             <Route path="reservations/:id/edit" element={<ReservationFormPage />} />
             <Route path="services" element={<ServicesPage />} />
+            <Route path="capacity" element={<CapacityPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

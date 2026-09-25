@@ -59,6 +59,25 @@ export function DashboardPage() {
       <ErrorAlert error={summary.error} />
       {summary.isPending ? <Loading /> : summary.data && (
         <>
+          {summary.data.occupancy.map((o) => {
+            const tile = (label: string, occ: { booked: number; limit: number | null }) => {
+              const pct = occ.limit ? occ.booked / occ.limit : 0;
+              const tone = occ.limit == null ? "" : pct >= 1 ? "badge-danger" : pct >= 0.85 ? "badge-warning" : "badge-success";
+              return (
+                <div className="panel stat">
+                  <div className="label">{label}{summary.data!.occupancy.length > 1 && ` · ${o.locationName}`}</div>
+                  <div className="value">{occ.booked}{occ.limit != null && <span className="muted" style={{ fontSize: "1rem", fontWeight: 500 }}> / {occ.limit}</span>}</div>
+                  {occ.limit != null && <span className={`badge ${tone}`}>{occ.booked >= occ.limit ? "Full" : `${occ.limit - occ.booked} ${occ.limit - occ.booked === 1 ? "space" : "spaces"} left`}</span>}
+                </div>
+              );
+            };
+            return (
+              <div key={o.locationId} className="stats">
+                {tile("Daycare today", o.daycare)}
+                {tile("Boarding tonight", o.boarding)}
+              </div>
+            );
+          })}
           <div className="stats">
             <div className="panel stat"><div className="label">Arriving today</div><div className="value">{summary.data.arrivals.length}</div></div>
             <div className="panel stat"><div className="label">Pets checked in</div><div className="value">{summary.data.petsCheckedIn}</div></div>
@@ -104,7 +123,7 @@ export function DashboardPage() {
             )}
           </Panel>
           <p className="muted" style={{ marginTop: 16 }}>
-            Occupancy, care tasks and balances will appear here as capacity, care records and billing are added.
+            Care tasks and balances will appear here as care records and billing are added.
           </p>
         </>
       )}

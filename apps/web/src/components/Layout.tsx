@@ -26,6 +26,7 @@ export function Layout() {
             <>
               <div className="nav-section">Business</div>
               <NavLink to="/services">Services</NavLink>
+              <NavLink to="/capacity">Kennels &amp; capacity</NavLink>
             </>
           )}
         </nav>

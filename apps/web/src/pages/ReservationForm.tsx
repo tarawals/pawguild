@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ApiError, get, patch, post, type Customer, type CustomerListItem, type Location, type Reservation, type Service,
 } from "../api";
-import { useMe } from "../auth";
+import { useCan, useMe } from "../auth";
 import { Checkbox, ErrorAlert, fieldErrors, Loading, PageHeader, Panel, SelectField, TextArea, TextField } from "../components/ui";
 import { fromLocalInput, toLocalInput } from "../units";
 
@@ -72,6 +72,8 @@ export function ReservationFormPage() {
   const [end, setEnd] = useState("");
   const [notes, setNotes] = useState("");
   const [confirmNow, setConfirmNow] = useState(true);
+  const [overrideCapacity, setOverrideCapacity] = useState(false);
+  const canOverride = useCan("reservations:override_capacity");
 
   const service = services.data?.items.find((s) => s.id === (editing ? existing.data?.service.id : serviceId));
   const activePets = useMemo(() => (customer.data?.pets ?? []).filter((p) => !p.archivedAt && p.status === "active"), [customer.data]);
@@ -106,9 +108,10 @@ export function ReservationFormPage() {
         ]);
       }
       return editing
-        ? patch<Reservation>(`/api/reservations/${id}`, { petIds, startsAt, endsAt, notes })
+        ? patch<Reservation>(`/api/reservations/${id}`, { petIds, startsAt, endsAt, notes, overrideCapacity })
         : post<Reservation>("/api/reservations", {
-            customerId, locationId, serviceId, petIds, startsAt, endsAt, notes, status: confirmNow ? "confirmed" : "pending",
+            customerId, locationId, serviceId, petIds, startsAt, endsAt, notes, overrideCapacity,
+            status: confirmNow ? "confirmed" : "pending",
           });
     },
     onSuccess: (r) => {
@@ -119,6 +122,7 @@ export function ReservationFormPage() {
     },
   });
   const err = fieldErrors(save.error);
+  const capacityFull = save.error instanceof ApiError && save.error.code === "capacity_full";
 
   if (!editing && !customerId) {
     return (
@@ -194,6 +198,11 @@ export function ReservationFormPage() {
           <div className="estimate" aria-live="polite">
             <span>{estimate.quantity} {PRICE_UNIT_LABELS[estimate.unit].replace("per ", "")}{estimate.quantity === 1 ? "" : "s"} × {estimate.petCount} pet{estimate.petCount === 1 ? "" : "s"} × {formatMoney(estimate.unitPriceCents)}</span>
             <span>Estimated <strong>{formatMoney(estimate.totalCents)}</strong></span>
+          </div>
+        )}
+        {(capacityFull || overrideCapacity) && canOverride && (
+          <div className="alert alert-warning">
+            <Checkbox label="Book over capacity (manager override — recorded in history)" checked={overrideCapacity} onChange={(e) => setOverrideCapacity(e.target.checked)} />
           </div>
         )}
         {!editing && <Checkbox label="Mark as confirmed" checked={confirmNow} onChange={(e) => setConfirmNow(e.target.checked)} />}

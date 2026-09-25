@@ -9,6 +9,11 @@ import { idParam } from "../lib/params";
 const COLUMNS = ["id", "locationId", "name", "kind", "capacity", "notes", "isActive", "createdAt", "updatedAt"] as const;
 const ACTIVE = ["pending", "confirmed", "checked_in"] as const;
 
+/** Natural order so "Kennel 2" sorts before "Kennel 10". */
+const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+const byKindThenName = <T extends { kind: string; name: string }>(a: T, b: T) =>
+  a.kind.localeCompare(b.kind) || collator.compare(a.name, b.name);
+
 async function getResource(trx: Tx, id: string) {
   const row = await trx.selectFrom("resources").select(COLUMNS).where("id", "=", id).executeTakeFirst();
   if (!row) throw notFound("Kennel or room");
@@ -29,7 +34,7 @@ export const resourceRoutes: FastifyPluginAsync = async (app) => {
       let query = trx.selectFrom("resources").select(COLUMNS);
       if (q.locationId) query = query.where("locationId", "=", q.locationId);
       if (!q.includeInactive) query = query.where("isActive", "=", true);
-      return { items: await query.orderBy("kind").orderBy("name").execute() };
+      return { items: (await query.execute()).sort(byKindThenName) };
     });
   });
 
@@ -49,7 +54,8 @@ export const resourceRoutes: FastifyPluginAsync = async (app) => {
           .$if(Boolean(q.excludeReservationId), (qb) => qb.where("r.id", "<>", q.excludeReservationId!))
           .as("occupied"))
         .where("res.locationId", "=", q.locationId).where("res.isActive", "=", true)
-        .orderBy("res.kind").orderBy("res.name").execute();
+        .execute();
+      rows.sort(byKindThenName);
       return { items: rows.map((r) => ({ ...r, occupied: Number(r.occupied ?? 0), available: r.capacity - Number(r.occupied ?? 0) })) };
     });
   });

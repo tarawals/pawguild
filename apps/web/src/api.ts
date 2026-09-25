@@ -17,7 +17,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(method: "GET" | "POST" | "PATCH", url: string, body?: unknown): Promise<T> {
+export async function api<T>(method: "GET" | "POST" | "PATCH" | "PUT", url: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
     res = await fetch(url, {
@@ -48,6 +48,7 @@ export async function api<T>(method: "GET" | "POST" | "PATCH", url: string, body
 export const get = <T,>(url: string) => api<T>("GET", url);
 export const post = <T,>(url: string, body?: unknown) => api<T>("POST", url, body ?? {});
 export const patch = <T,>(url: string, body: unknown) => api<T>("PATCH", url, body);
+export const put = <T,>(url: string, body: unknown) => api<T>("PUT", url, body);
 
 // ---- Response types (mirror the API) --------------------------------------------------------
 
@@ -97,7 +98,18 @@ export interface Service {
   priceUnit: string; durationMinutes: number | null; isActive: boolean;
 }
 
-export interface Location { id: string; name: string; timezone: string | null; isActive: boolean }
+export interface Location {
+  id: string; name: string; timezone: string | null; isActive: boolean;
+  capacity: { daycare: number | null; boarding: number | null };
+}
+
+export interface Resource {
+  id: string; locationId: string; name: string; kind: string; capacity: number; notes: string | null; isActive: boolean;
+}
+
+export interface ResourceAvailability { id: string; name: string; kind: string; capacity: number; occupied: number; available: number }
+
+export interface Occupancy { period: string; booked: number; limit: number | null }
 
 export interface ReservationListItem {
   id: string; status: string; startsAt: string; endsAt: string; customerId: string; customerName: string;
@@ -111,7 +123,10 @@ export interface Reservation {
   customer: { id: string; firstName: string; lastName: string; phone: string | null };
   service: { id: string; name: string; category: string };
   location: { id: string; name: string };
-  pets: { id: string; name: string; species: string; breed: string | null; allergies: string | null; medicalNotes: string | null }[];
+  pets: {
+    id: string; name: string; species: string; breed: string | null; allergies: string | null; medicalNotes: string | null;
+    resourceId: string | null; resourceName: string | null;
+  }[];
   allowedTransitions: string[];
   estimate: { quantity: number; petCount: number; unitPriceCents: number; totalCents: number };
 }
@@ -120,6 +135,7 @@ export interface DashboardSummary {
   activeCustomers: number;
   activePets: number;
   petsCheckedIn: number;
+  occupancy: { locationId: string; locationName: string; daycare: Occupancy; boarding: Occupancy }[];
   arrivals: ReservationListItem[];
   departures: ReservationListItem[];
   vaccinationAlerts: { petId: string; petName: string; vaccine: string; expiresOn: string; customerName: string }[];
