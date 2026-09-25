@@ -1,4 +1,4 @@
-import { capacityLimitsInput } from "@pawguild/shared";
+import { capacityLimitsInput, taxRateInput } from "@pawguild/shared";
 import type { FastifyPluginAsync } from "fastify";
 import { withTenant } from "../db";
 import { recordAudit } from "../lib/audit";
@@ -9,7 +9,7 @@ import { idParam } from "../lib/params";
 export const locationRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", { preHandler: app.authorize() }, async (req) =>
     withTenant(app.db, req.auth, async (trx) => {
-      const locations = await trx.selectFrom("locations").select(["id", "name", "timezone", "isActive"])
+      const locations = await trx.selectFrom("locations").select(["id", "name", "timezone", "isActive", "taxRateBps"])
         .where("isActive", "=", true).orderBy("name").execute();
       const limits = await trx.selectFrom("locationCapacities").select(["locationId", "category", "maxPets"]).execute();
       return {
@@ -20,6 +20,21 @@ export const locationRoutes: FastifyPluginAsync = async (app) => {
       };
     }),
   );
+
+  app.put("/:id/tax-rate", { preHandler: app.authorize("locations:manage") }, async (req) => {
+    const id = idParam(req.params, "Location");
+    const { taxRateBps } = taxRateInput.parse(req.body);
+    return withTenant(app.db, req.auth, async (trx) => {
+      const before = await trx.selectFrom("locations").select("taxRateBps").where("id", "=", id).executeTakeFirst();
+      if (!before) throw notFound("Location");
+      if (before.taxRateBps !== taxRateBps) {
+        await trx.updateTable("locations").set({ taxRateBps }).where("id", "=", id).execute();
+        await recordAudit(trx, req.auth, { action: "location.tax_rate_updated", entityType: "location", entityId: id,
+          changes: { taxRateBps: { from: before.taxRateBps, to: taxRateBps } } });
+      }
+      return { taxRateBps };
+    });
+  });
 
   app.put("/:id/capacity", { preHandler: app.authorize("locations:manage") }, async (req) => {
     const id = idParam(req.params, "Location");

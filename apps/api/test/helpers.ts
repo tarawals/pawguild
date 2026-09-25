@@ -68,12 +68,13 @@ export async function login(app: App, email: string, password = PASSWORD) {
   if (res.statusCode !== 200) throw new Error(`login failed: ${res.statusCode} ${res.body}`);
   const cookie = res.cookies.find((c) => c.name === "pawguild_session")!;
   const headers = { cookie: `pawguild_session=${cookie.value}`, "x-pawguild-request": "1" };
-  const call = (method: "GET" | "POST" | "PATCH" | "PUT", url: string, payload?: unknown) =>
+  const call = (method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE", url: string, payload?: unknown) =>
     app.inject({ method, url, headers, ...(payload !== undefined ? { payload: payload as object } : {}) });
   return {
     get: (url: string) => call("GET", url),
     post: (url: string, payload: unknown = {}) => call("POST", url, payload),
     patch: (url: string, payload: unknown) => call("PATCH", url, payload),
     put: (url: string, payload: unknown) => call("PUT", url, payload),
+    delete: (url: string) => call("DELETE", url),
   };
 }

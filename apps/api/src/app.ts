@@ -9,6 +9,7 @@ import type { AuthContext } from "./lib/auth-context";
 import { AppError, forbidden, unauthenticated } from "./lib/errors";
 import { auditRoutes } from "./routes/audit";
 import { authRoutes } from "./routes/auth";
+import { billingRoutes } from "./routes/billing";
 import { careRoutes } from "./routes/care";
 import { incidentRoutes } from "./routes/incidents";
 import { medicationRoutes } from "./routes/medications";
@@ -108,6 +109,12 @@ export async function buildApp(opts: { db: Db; config: Config; logger?: boolean 
         .send({ error: { code: err.code, message: err.message, details: err.details } });
     }
     const pgCode = (err as { code?: string }).code;
+    // Business-rule violations raised by our own database triggers carry staff-safe messages.
+    if (pgCode === "P0001") {
+      const raw = (err as Error).message;
+      const msg = raw.charAt(0).toUpperCase() + raw.slice(1);
+      return reply.status(409).send({ error: { code: "rule_violation", message: `${msg}.` } });
+    }
     const mapped = pgCode ? PG_ERROR_MESSAGES[pgCode] : undefined;
     if (mapped) {
       req.log.info({ pgCode }, "database constraint rejected request");
@@ -135,6 +142,7 @@ export async function buildApp(opts: { db: Db; config: Config; logger?: boolean 
   await app.register(locationRoutes, { prefix: "/api/locations" });
   await app.register(resourceRoutes, { prefix: "/api/resources" });
   await app.register(reservationRoutes, { prefix: "/api/reservations" });
+  await app.register(billingRoutes, { prefix: "/api" });
   await app.register(dashboardRoutes, { prefix: "/api/dashboard" });
   return app;
 }

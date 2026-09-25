@@ -76,6 +76,8 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     .select(["p.id", "p.name", "p.species", "p.breed", "p.allergies", "p.medicalNotes", "rp.resourceId", "res.name as resourceName"])
     .where("rp.reservationId", "=", id).orderBy("p.name").execute();
   const vaccinationCheck = (await reservationVaccinationChecks(trx, [id])).get(id) ?? [];
+  const invoice = await trx.selectFrom("invoices").select(["id", "status", "number"])
+    .where("reservationId", "=", id).where("status", "<>", "void").executeTakeFirst() ?? null;
   const { firstName, lastName, phone, serviceName, serviceCategory, locationName, locationTimezone, ...rest } = r;
   const status = r.status as ReservationStatus;
   return {
@@ -85,6 +87,7 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     location: { id: r.locationId, name: locationName },
     pets,
     vaccinationCheck,
+    invoice,
     allowedTransitions: allowedTransitions(status),
     estimate: estimateReservation({
       unit: r.priceUnit as PriceUnit, unitPriceCents: r.unitPriceCents, startsAt: r.startsAt, endsAt: r.endsAt,

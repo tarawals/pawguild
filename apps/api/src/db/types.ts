@@ -35,6 +35,7 @@ export interface LocationsTable {
   email: string | null;
   timezone: string | null;
   isActive: Generated<boolean>;
+  taxRateBps: Generated<number>;
   createdAt: CreatedAt;
   updatedAt: Generated<Date>;
 }
@@ -166,6 +167,7 @@ export interface ServicesTable {
   priceUnit: string;
   durationMinutes: number | null;
   isActive: Generated<boolean>;
+  isTaxable: Generated<boolean>;
   createdAt: CreatedAt;
   updatedAt: Generated<Date>;
 }
@@ -286,6 +288,65 @@ export interface IncidentsTable {
   resolution: string | null;
 }
 
+export interface InvoiceCountersTable {
+  organizationId: string;
+  lastNumber: Generated<number>;
+}
+
+export interface InvoicesTable {
+  id: Generated<string>;
+  organizationId: string;
+  locationId: string;
+  customerId: string;
+  reservationId: string | null;
+  status: Generated<string>;
+  number: number | null;
+  taxRateBps: number;
+  subtotalCents: number | null;
+  discountCents: number | null;
+  taxCents: number | null;
+  totalCents: number | null;
+  notes: string | null;
+  createdByUserId: string;
+  createdAt: CreatedAt;
+  updatedAt: Generated<Date>;
+  issuedAt: Date | null;
+  issuedByUserId: string | null;
+  voidedAt: Date | null;
+  voidedByUserId: string | null;
+  voidReason: string | null;
+}
+
+export interface InvoiceLinesTable {
+  id: Generated<string>;
+  organizationId: string;
+  invoiceId: string;
+  serviceId: string | null;
+  description: string;
+  quantity: number;
+  unitPriceCents: number;
+  discountCents: Generated<number>;
+  taxable: boolean;
+  position: Generated<number>;
+  createdAt: CreatedAt;
+}
+
+export interface PaymentsTable {
+  id: Generated<string>;
+  organizationId: string;
+  customerId: string;
+  invoiceId: string;
+  amountCents: number;
+  method: string;
+  reference: string | null;
+  receivedAt: Timestamp;
+  recordedByUserId: string;
+  createdAt: CreatedAt;
+  voidedAt: Date | null;
+  voidedByUserId: string | null;
+  voidReason: string | null;
+}
+
 export interface Database {
   organizations: OrganizationsTable;
   locations: LocationsTable;
@@ -306,6 +367,10 @@ export interface Database {
   petMedications: PetMedicationsTable;
   careLogs: CareLogsTable;
   incidents: IncidentsTable;
+  invoiceCounters: InvoiceCountersTable;
+  invoices: InvoicesTable;
+  invoiceLines: InvoiceLinesTable;
+  payments: PaymentsTable;
 }
 
 export type Customer = Selectable<CustomersTable>;

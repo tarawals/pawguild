@@ -20,7 +20,7 @@ export async function seed(connectionString: string, password: string) {
         .values({ name: "Harbor Hounds Pet Resort", slug: "harbor-hounds", email: "frontdesk@harborhounds.example", phone: "555-0100", timezone: "America/New_York" })
         .returning("id").executeTakeFirstOrThrow();
       const location = await trx.insertInto("locations")
-        .values({ organizationId: org.id, name: "Harbor Hounds — Downtown", city: "Portland", region: "ME", country: "US" })
+        .values({ organizationId: org.id, name: "Harbor Hounds — Downtown", city: "Portland", region: "ME", country: "US", taxRateBps: 550 })
         .returning("id").executeTakeFirstOrThrow();
       await trx.insertInto("locationCapacities").values([
         { organizationId: org.id, locationId: location.id, category: "daycare", maxPets: 40 },
@@ -37,9 +37,9 @@ export async function seed(connectionString: string, password: string) {
         { organizationId: org.id, name: "Daycare — Full Day", category: "daycare", priceCents: 3800, priceUnit: "per_day" },
         { organizationId: org.id, name: "Daycare — Half Day", category: "daycare", priceCents: 2600, priceUnit: "per_day" },
         { organizationId: org.id, name: "Boarding — Standard Suite", category: "boarding", priceCents: 5500, priceUnit: "per_night" },
-        { organizationId: org.id, name: "Full Groom", category: "grooming", priceCents: 8500, priceUnit: "per_visit", durationMinutes: 120 },
-        { organizationId: org.id, name: "Bath & Brush", category: "grooming", priceCents: 4000, priceUnit: "per_visit", durationMinutes: 60 },
-        { organizationId: org.id, name: "Nail Trim", category: "add_on", priceCents: 1500, priceUnit: "per_visit", durationMinutes: 15 },
+        { organizationId: org.id, name: "Full Groom", category: "grooming", priceCents: 8500, priceUnit: "per_visit", durationMinutes: 120, isTaxable: true },
+        { organizationId: org.id, name: "Bath & Brush", category: "grooming", priceCents: 4000, priceUnit: "per_visit", durationMinutes: 60, isTaxable: true },
+        { organizationId: org.id, name: "Nail Trim", category: "add_on", priceCents: 1500, priceUnit: "per_visit", durationMinutes: 15, isTaxable: true },
       ]).returning(["id", "category"]).execute();
       // Typical requirements: daycare/boarding need core vaccines plus Bordetella; grooming needs Rabies.
       const requirement = (serviceId: string, species: string, vaccine: string) => ({ organizationId: org.id, serviceId, species, vaccine });

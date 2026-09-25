@@ -7,7 +7,7 @@ import { diff, recordAudit } from "../lib/audit";
 import { notFound } from "../lib/errors";
 import { idParam } from "../lib/params";
 
-const COLUMNS = ["id", "name", "category", "description", "priceCents", "priceUnit", "durationMinutes", "isActive", "createdAt", "updatedAt"] as const;
+const COLUMNS = ["id", "name", "category", "description", "priceCents", "priceUnit", "durationMinutes", "isActive", "isTaxable", "createdAt", "updatedAt"] as const;
 
 async function getService(trx: Tx, id: string) {
   const row = await trx.selectFrom("services").select(COLUMNS).where("id", "=", id).executeTakeFirst();
