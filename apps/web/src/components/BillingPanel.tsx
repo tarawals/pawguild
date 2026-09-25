@@ -1,4 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { formatMoney } from "@pawguild/shared";
+import { useState } from "react";
+import { ReceiveCreditForm } from "./AccountCredit";
 import { Link, useNavigate } from "react-router";
 import { ApiError, invoiceLabel, post, type Invoice, type Reservation } from "../api";
 import { useCan } from "../auth";
@@ -10,6 +13,7 @@ export function BillingPanel({ reservation: r }: { reservation: Reservation }) {
   const canWrite = useCan("billing:write");
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [takingDeposit, setTakingDeposit] = useState(false);
   const create = useMutation({
     mutationFn: () => post<Invoice>(`/api/reservations/${r.id}/invoice`),
     onSuccess: (inv) => { qc.invalidateQueries({ queryKey: ["reservation", r.id] }); navigate(`/invoices/${inv.id}`); },
@@ -21,7 +25,9 @@ export function BillingPanel({ reservation: r }: { reservation: Reservation }) {
   if (!canRead) return null;
   const billable = r.status !== "cancelled" && r.status !== "no_show";
   return (
-    <Panel title="Billing">
+    <Panel title="Billing" actions={canWrite && billable && !takingDeposit && !r.invoice && <button className="btn btn-small" onClick={() => setTakingDeposit(true)}>Take deposit</button>}>
+      {r.depositsCents > 0 && <p style={{ margin: "0 0 8px" }}>Deposit received: <strong>{formatMoney(r.depositsCents)}</strong> <span className="muted">(held as account credit; apply it on the invoice)</span></p>}
+      {takingDeposit && <div style={{ marginBottom: 12 }}><ReceiveCreditForm customerId={r.customer.id} reservationId={r.id} label="Record deposit" onDone={() => setTakingDeposit(false)} /></div>}
       {r.invoice ? (
         <p style={{ margin: 0 }}><Link to={`/invoices/${r.invoice.id}`}>{invoiceLabel(r.invoice)}</Link></p>
       ) : billable && canWrite ? (

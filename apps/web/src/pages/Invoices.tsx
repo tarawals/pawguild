@@ -6,7 +6,7 @@ import { InvoiceStatusBadge } from "../components/InvoiceStatusBadge";
 import { EmptyState, ErrorAlert, Loading, PageHeader, Panel } from "../components/ui";
 import { formatDate } from "../units";
 
-const FILTERS = [["unpaid", "Unpaid"], ["draft", "Drafts"], ["paid", "Paid"], ["void", "Void"], ["", "All"]] as const;
+const FILTERS = [["unpaid", "Unpaid"], ["overpaid", "Overpaid"], ["draft", "Drafts"], ["paid", "Paid"], ["void", "Void"], ["", "All"]] as const;
 
 export function InvoicesPage() {
   const [params, setParams] = useSearchParams();
@@ -41,7 +41,7 @@ export function InvoicesPage() {
                       <td><Link to={`/customers/${i.customerId}`}>{i.customerName}</Link></td>
                       <td>{formatDate((i.issuedAt ?? i.createdAt).slice(0, 10))}</td>
                       <td style={{ textAlign: "right" }}>{formatMoney(Number(i.totalCents))}</td>
-                      <td style={{ textAlign: "right" }}>{i.status === "issued" ? formatMoney(i.balanceCents) : "—"}</td>
+                      <td style={{ textAlign: "right" }}>{i.status === "issued" ? (i.balanceCents < 0 ? `${formatMoney(-i.balanceCents)} owed back` : formatMoney(i.balanceCents)) : "—"}</td>
                       <td><InvoiceStatusBadge status={i.status} balanceCents={i.balanceCents} paidCents={Number(i.paidCents)} /></td>
                     </tr>
                   ))}

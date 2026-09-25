@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
 import { formatMoney } from "@pawguild/shared";
 import { get, invoiceLabel, post, type Customer, type Invoice, type InvoiceListItem, type Location, type ReservationListItem } from "../api";
+import { AccountCreditPanel } from "../components/AccountCredit";
 import { InvoiceStatusBadge } from "../components/InvoiceStatusBadge";
 import { useCan } from "../auth";
 import { EmptyState, ErrorAlert, Loading, PageHeader, Panel, ReservationStatusBadge, StatusBadge } from "../components/ui";
@@ -46,7 +47,9 @@ function CustomerInvoices({ customer }: { customer: Customer }) {
     onSuccess: (inv) => navigate(`/invoices/${inv.id}`),
   });
   return (
-    <Panel title={<>Billing {customer.balanceCents ? <span className="badge badge-danger">{formatMoney(customer.balanceCents)} due</span> : <span className="badge badge-success">No balance</span>}</>} bodyless
+    <Panel title={<>Billing{" "}
+      {customer.billing!.owedCents > 0 ? <span className="badge badge-danger">{formatMoney(customer.billing!.owedCents)} due</span> : <span className="badge badge-success">No balance</span>}
+      {customer.billing!.overpaidCents > 0 && <> <span className="badge badge-warning">{formatMoney(customer.billing!.overpaidCents)} owed back</span></>}</>} bodyless
       actions={canWrite && !customer.archivedAt && <button className="btn btn-small" disabled={create.isPending || !locations.data?.items.length} onClick={() => create.mutate()}>New invoice</button>}>
       <ErrorAlert error={create.error} />
       {list.isPending ? <div className="panel-body"><Loading /></div> : list.error ? <div className="panel-body"><ErrorAlert error={list.error} /></div> :
@@ -130,7 +133,8 @@ export function CustomerDetailPage() {
               </div>
             ) : <EmptyState title="No pets yet">Add this customer's pets to start booking stays.</EmptyState>}
           </Panel>
-          {c.balanceCents !== null && c.balanceCents !== undefined && <CustomerInvoices customer={c} />}
+          {c.billing && <CustomerInvoices customer={c} />}
+          {c.billing && <AccountCreditPanel customerId={c.id} />}
           <CustomerReservations customerId={c.id} canBook={canBook && !archived && c.status !== "banned"} />
           <History entityType="customer" entityId={c.id} />
         </div>

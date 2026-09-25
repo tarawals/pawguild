@@ -93,6 +93,7 @@ export function DashboardPage() {
                 <div className="label">Outstanding balances</div>
                 <div className="value">{formatMoney(summary.data.outstanding.cents)}</div>
                 <span className="muted" style={{ fontSize: "0.85rem" }}>{summary.data.outstanding.invoices} unpaid invoice{summary.data.outstanding.invoices === 1 ? "" : "s"}</span>
+                {summary.data.outstanding.overpaidInvoices > 0 && <div><span className="badge badge-warning">{summary.data.outstanding.overpaidInvoices} overpaid — refund due</span></div>}
               </Link>
             ) : <div className="panel stat"><div className="label">Active customers</div><div className="value">{summary.data.activeCustomers}</div></div>}
           </div>

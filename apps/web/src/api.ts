@@ -74,8 +74,8 @@ export interface Customer {
   status: string; emailOptIn: boolean; smsOptIn: boolean; archivedAt: string | null;
   createdAt: string; updatedAt: string;
   pets?: { id: string; name: string; species: string; breed: string | null; status: string; archivedAt: string | null }[];
-  /** Outstanding balance in cents; null when the user can't see billing. */
-  balanceCents?: number | null;
+  /** Billing summary; null when the user can't see billing. */
+  billing?: { owedCents: number; overpaidCents: number; creditCents: number } | null;
 }
 
 export interface Pet {
@@ -134,6 +134,7 @@ export interface Reservation {
     resourceId: string | null; resourceName: string | null;
   }[];
   invoice: { id: string; status: string; number: number | null } | null;
+  depositsCents: number;
   vaccinationCheck: {
     petId: string; petName: string; ok: boolean;
     checks: { vaccine: string; state: "current" | "missing" | "expired" | "expires_during_stay"; expiresOn: string | null }[];
@@ -146,7 +147,7 @@ export interface DashboardSummary {
   activeCustomers: number;
   activePets: number;
   petsCheckedIn: number;
-  outstanding: { cents: number; invoices: number } | null;
+  outstanding: { cents: number; invoices: number; overpaidInvoices: number } | null;
   medicationDue: Dose[];
   openIncidents: { id: string; petId: string; petName: string; category: string; severity: string; occurredAt: string; reservationId: string | null; followUpRequired: boolean }[];
   occupancy: { locationId: string; locationName: string; daycare: Occupancy; boarding: Occupancy }[];
@@ -215,10 +216,18 @@ export interface Invoice {
   customer: { id: string; firstName: string; lastName: string; email: string | null; phone: string | null };
   location: { id: string; name: string };
   lines: InvoiceLine[]; payments: Payment[];
+  creditNotes: { id: string; amountCents: number; reason: string; createdAt: string; createdBy: string }[];
+  refunds: { id: string; amountCents: number; method: string; reference: string | null; reason: string; refundedAt: string; recordedBy: string }[];
   totals: { subtotalCents: number; discountCents: number; taxableCents: number; taxCents: number; totalCents: number };
-  paidCents: number; balanceCents: number;
-  paymentStatus: "draft" | "void" | "unpaid" | "partially_paid" | "paid";
+  creditNotesCents: number; refundsCents: number; paidCents: number; balanceCents: number; customerCreditCents: number;
+  paymentStatus: "draft" | "void" | "unpaid" | "partially_paid" | "paid" | "overpaid";
 }
 
 export const invoiceLabel = (i: { number: number | null; status: string }) =>
   i.number ? `Invoice #${String(i.number).padStart(4, "0")}` : i.status === "void" ? "Void draft" : "Draft invoice";
+
+export interface CreditEntry {
+  id: string; amountCents: number; kind: "received" | "from_invoice" | "reversal" | "applied" | "refunded";
+  method: string | null; reference: string | null; note: string | null; reservationId: string | null;
+  invoiceId: string | null; invoiceNumber: number | null; createdAt: string; recordedBy: string;
+}
