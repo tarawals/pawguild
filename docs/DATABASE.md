@@ -98,6 +98,27 @@ mid-stay count as failing. Names match case-insensitively. Managers can override
 - Scheduled doses (`apps/api/src/lib/care.ts`) are computed for the local "today" in the location's
   time zone, limited to the part of the day the pet is in our care. A dose is overdue 30 minutes after its time.
 
+## 0006_billing
+
+| Table / column | Purpose | Notes |
+|---|---|---|
+| `locations.tax_rate_bps` | Sales tax rate for the location | basis points (825 = 8.25%); defaults to 0 |
+| `services.is_taxable` | Whether tax applies to the service | defaults to false; toggled per service |
+| `invoice_counters` | Next invoice number per organization | numbers are assigned only when an invoice is issued, so they have no gaps |
+| `invoices` | Draft → issued → void | issuing snapshots the tax rate and stores the subtotal, discount, tax and total; one live invoice per reservation |
+| `invoice_lines` | Charges | integer cents; `discount_cents` ≤ quantity × price; `taxable` is snapshotted from the service |
+| `payments` | Money received against an issued invoice | voided with a reason, never deleted; the invoice must belong to the same customer (composite FK) |
+
+Database triggers (so the rules hold even if application code is wrong):
+- `invoice_lines_draft_only`: lines can only be added, changed or removed while the invoice is a draft.
+- `invoices_guard`: void is final; issued can't go back to draft; issued amounts, tax rate, customer and
+  number can't change; on issue it recomputes the totals from the lines and refuses a mismatch.
+- `payments_issued_only`: payments only on issued invoices.
+
+Tax: computed once per invoice on the sum of taxable lines after discounts, rounded half away from zero
+(`packages/shared/src/invoice.ts` and the same formula in the trigger).
+Balance: issued invoice totals minus non-voided payments (`customerBalance` in `routes/billing.ts`).
+
 Tables without RLS: `users` and `sessions`. They are identity data that login needs before a
 tenant is known, and the app only reaches them by id, email or token hash.
 `organizations` and `memberships` have RLS that also lets a user see their own memberships.

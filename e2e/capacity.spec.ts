@@ -24,7 +24,7 @@ test.describe.configure({ mode: "serial" });
 
 test("owner sets a daycare limit and books the last space", async ({ page }) => {
   await signIn(page, "owner@harborhounds.example");
-  await page.getByRole("link", { name: "Kennels & capacity" }).click();
+  await page.getByRole("link", { name: "Locations" }).click();
   await page.getByLabel("Daycare (pets per day)").fill("1");
   await page.getByRole("button", { name: "Save limits" }).click();
   await expect(page.getByRole("status")).toHaveText("Saved.");

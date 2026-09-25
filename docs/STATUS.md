@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-09-25 (session 5: care records)_
+_Last updated: 2026-09-25 (session 6: billing part 1)_
 
 ## Built and tested
 
@@ -20,14 +20,17 @@ _Last updated: 2026-09-25 (session 5: care records)_
 | **Medications** (standing orders with scheduled times or as-needed; discontinue, never delete) | ✅ | ✅ | `pets:write` to manage | Medications panel on pet page | unit + integration + e2e |
 | **Care log** (feeding, medication given/refused/skipped, potty, walk, play, rest, notes; void with reason, never edit) | ✅ | ✅ | `care:record` | Today's care page with one-tap logging and doses due; Care log panel on reservation | integration + e2e |
 | **Incidents** (report, follow up, manager resolves and locks) | ✅ | ✅ | `incidents:record`; `incidents:resolve` (managers) | Report from Today's care; Incidents page | integration + e2e |
-| Dashboard (medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
+| **Sales tax** (rate per location; on/off per service) | ✅ | ✅ | `locations:manage` (rate); `services:manage` (toggle) | Locations page; Taxed switch on Services | unit + integration + e2e |
+| **Invoices** (from a reservation at the booked rate, or manual; service/custom lines; per-line $ or % discounts; issue locks the invoice and assigns a gap-free number; void; print) | ✅ + DB triggers | ✅ | `billing:read/write`; voiding issued invoices is `billing:refund` (managers) | Invoices list, invoice page, Billing panel on reservations and customers | unit + integration + e2e |
+| **Payments and balances** (can't exceed the balance; managers void mistakes; customer balance; dashboard outstanding) | ✅ | ✅ | `billing:write`; void `billing:refund` | Record payment on invoice | integration + e2e |
+| Dashboard (outstanding balances, medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
 | Audit log (append-only, field diffs) | ✅ | read endpoint | `audit:read` | history panels (customer, pet, reservation) | integration |
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results: typecheck ✅, 31 shared unit tests ✅, 57 API integration tests ✅,
-4 web tests ✅, 13 Playwright e2e tests ✅. An exploratory browser QA pass (12 scenarios) against an
-upgraded copy of the previous version's database also passed, with no console errors.
+Latest check results: typecheck ✅, 35 shared unit tests ✅, 67 API integration tests ✅,
+4 web tests ✅, 15 Playwright e2e tests ✅. An exploratory browser QA pass (13 billing scenarios) against
+an upgraded copy of the previous version's database also passed, with no console errors.
 
 ## Not built yet (in scope, by priority)
 
@@ -53,6 +56,10 @@ upgraded copy of the previous version's database also passed, with no console er
 - Dates and times display in the browser's time zone, while medication times and "today" use the
   business's time zone. These match when staff computers are set to the business's time zone.
   Showing everything in the location's zone is future work.
+- Refunds, account credit and deposits aren't built yet. An overpayment is refused rather than
+  held as credit. A refund can currently only be represented by voiding the payment
+  (manager-only, with a reason).
+- There's one tax rate per location. Multiple tax jurisdictions and tax-exempt customers aren't supported.
 - Feeding has no schedule (only instructions and a log), so feeding isn't in a "due" list yet.
 - Vaccine names are free text, matched case-insensitively. "Bordetella" and "Kennel cough" won't
   match each other. A managed vaccine list would fix that.
@@ -72,10 +79,8 @@ upgraded copy of the previous version's database also passed, with no console er
 
 ## Next recommended step
 
-**Billing, part 1 (invoices):** generate an invoice from a reservation (stay lines from the
-locked-in price, with quantity and pets), allow add-on lines from services, then tax (basis
-points) and discounts. Invoices get draft and issued states, and an issued invoice is immutable
-(corrections are credit notes). Then record payments and derive the customer's balance.
-Money stays in integer cents throughout (`packages/shared/src/money.ts`).
-**Decision needed before starting:** tax rules. Is there one tax rate per location, and are
-services taxable individually? Tax rules vary by state.
+**Billing part 2:** refunds recorded against a payment (partial allowed, reason required,
+managers only, never exceeding what was paid), then account credit. When a refund is owed to
+credit instead of cash, or a customer overpays, the credit becomes a customer ledger entry that
+can be applied to a later invoice. Balances then include credit. Deposits on reservations follow
+once credit exists.
