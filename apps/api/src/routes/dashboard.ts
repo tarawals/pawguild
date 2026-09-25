@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import { calendarDate } from "@pawguild/shared";
 import { withTenant } from "../db";
 import { occupancy } from "../lib/capacity";
+import { todaysDoses } from "../lib/care";
 import { reservationVaccinationChecks } from "../lib/vaccinations";
 
 /**
@@ -72,8 +73,18 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         petsNeedingVaccinations: (checks.get(a.id) ?? []).filter((p) => !p.ok).map((p) => p.petName),
       }));
 
+      // Medication due now or overdue (and the next two hours), and incidents awaiting resolution.
+      const soon = Date.now() + 2 * 3600_000;
+      const medicationDue = (await todaysDoses(trx))
+        .filter((d) => d.status === "overdue" || (d.status === "due" && d.scheduledFor.getTime() <= soon));
+      const openIncidents = await trx.selectFrom("incidents as i").innerJoin("pets as p", "p.id", "i.petId")
+        .select(["i.id", "i.petId", "p.name as petName", "i.category", "i.severity", "i.occurredAt", "i.reservationId", "i.followUpRequired"])
+        .where("i.resolvedAt", "is", null).orderBy("i.occurredAt", "desc").limit(20).execute();
+
       return {
         ...counts,
+        medicationDue,
+        openIncidents,
         occupancy: occupancyByLocation,
         arrivals: arrivalsWithChecks,
         departures,

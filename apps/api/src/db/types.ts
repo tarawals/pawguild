@@ -228,6 +228,64 @@ export interface ServiceVaccineRequirementsTable {
   vaccine: string;
 }
 
+export interface PetMedicationsTable {
+  id: Generated<string>;
+  organizationId: string;
+  petId: string;
+  name: string;
+  dosage: string;
+  instructions: string | null;
+  /** time[]; select as text[] (see routes/medications.ts). */
+  times: ColumnType<string[], string[] | undefined, never>;
+  createdByUserId: string;
+  createdAt: CreatedAt;
+  discontinuedAt: Date | null;
+  discontinuedByUserId: string | null;
+}
+
+export interface CareLogsTable {
+  id: Generated<string>;
+  organizationId: string;
+  reservationId: string;
+  petId: string;
+  kind: string;
+  occurredAt: Timestamp;
+  notes: string | null;
+  meal: string | null;
+  amountEaten: string | null;
+  petMedicationId: string | null;
+  medicationName: string | null;
+  dose: string | null;
+  medicationStatus: string | null;
+  scheduledFor: Timestamp | null;
+  recordedByUserId: string;
+  createdAt: CreatedAt;
+  voidedAt: Date | null;
+  voidedByUserId: string | null;
+  voidReason: string | null;
+}
+
+export interface IncidentsTable {
+  id: Generated<string>;
+  organizationId: string;
+  petId: string;
+  reservationId: string | null;
+  occurredAt: Timestamp;
+  category: string;
+  severity: string;
+  description: string;
+  actionsTaken: string | null;
+  ownerNotified: Generated<boolean>;
+  followUpRequired: Generated<boolean>;
+  followUpNotes: string | null;
+  reportedByUserId: string;
+  createdAt: CreatedAt;
+  updatedAt: Generated<Date>;
+  resolvedAt: Date | null;
+  resolvedByUserId: string | null;
+  resolution: string | null;
+}
+
 export interface Database {
   organizations: OrganizationsTable;
   locations: LocationsTable;
@@ -245,6 +303,9 @@ export interface Database {
   locationCapacities: LocationCapacitiesTable;
   resources: ResourcesTable;
   serviceVaccineRequirements: ServiceVaccineRequirementsTable;
+  petMedications: PetMedicationsTable;
+  careLogs: CareLogsTable;
+  incidents: IncidentsTable;
 }
 
 export type Customer = Selectable<CustomersTable>;
