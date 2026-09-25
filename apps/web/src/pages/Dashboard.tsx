@@ -90,6 +90,34 @@ export function DashboardPage() {
             <div className="panel stat"><div className="label">Active customers</div><div className="value">{summary.data.activeCustomers}</div></div>
           </div>
           <div className="stack" style={{ marginBottom: 16 }}>
+            {(summary.data.medicationDue.length > 0 || summary.data.openIncidents.length > 0) && (
+              <div className="grid-2">
+                <Panel title="Medication due" bodyless actions={<Link className="btn btn-small" to="/care">Today's care</Link>}>
+                  {summary.data.medicationDue.length === 0 ? <EmptyState title="Nothing due in the next 2 hours" /> : (
+                    <ul style={{ listStyle: "none", margin: 0, padding: "4px 16px" }}>
+                      {summary.data.medicationDue.map((d) => (
+                        <li key={`${d.medicationId}-${d.scheduledFor}`} className="dose">
+                          <span><strong>{formatTime(d.scheduledFor)}</strong> {d.petName} · {d.medicationName} <span className="muted">{d.dosage}</span></span>
+                          {d.status === "overdue" ? <span className="badge badge-danger">Overdue</span> : <span className="badge badge-warning">Due</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Panel>
+                <Panel title="Open incidents" bodyless actions={<Link className="btn btn-small" to="/incidents">All incidents</Link>}>
+                  {summary.data.openIncidents.length === 0 ? <EmptyState title="No open incidents" /> : (
+                    <ul style={{ listStyle: "none", margin: 0, padding: "4px 16px" }}>
+                      {summary.data.openIncidents.map((i) => (
+                        <li key={i.id} className="dose">
+                          <span><Link to="/incidents">{i.petName}</Link> · {i.category}</span>
+                          <span className={`badge severity-${i.severity}`}>{i.severity}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Panel>
+              </div>
+            )}
             <Panel title="Arrivals today" bodyless>
               {summary.data.arrivals.length === 0 ? <EmptyState title="No more arrivals today" /> : <StayTable rows={summary.data.arrivals} kind="arrivals" />}
             </Panel>
@@ -128,7 +156,7 @@ export function DashboardPage() {
             )}
           </Panel>
           <p className="muted" style={{ marginTop: 16 }}>
-            Care tasks and balances will appear here as care records and billing are added.
+            Balances will appear here once billing is added.
           </p>
         </>
       )}

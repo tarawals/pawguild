@@ -142,8 +142,47 @@ export interface DashboardSummary {
   activeCustomers: number;
   activePets: number;
   petsCheckedIn: number;
+  medicationDue: Dose[];
+  openIncidents: { id: string; petId: string; petName: string; category: string; severity: string; occurredAt: string; reservationId: string | null; followUpRequired: boolean }[];
   occupancy: { locationId: string; locationName: string; daycare: Occupancy; boarding: Occupancy }[];
   arrivals: ReservationListItem[];
   departures: ReservationListItem[];
   vaccinationAlerts: { petId: string; petName: string; vaccine: string; expiresOn: string; customerName: string }[];
+}
+
+// ---- Care ----------------------------------------------------------------------------------
+
+export interface Medication {
+  id: string; name: string; dosage: string; instructions: string | null; times: string[];
+  createdAt: string; discontinuedAt: string | null;
+}
+
+export interface Dose {
+  reservationId: string; petId: string; petName: string; medicationId: string; medicationName: string;
+  dosage: string; scheduledFor: string; status: "due" | "overdue" | "given" | "refused" | "skipped"; careLogId: string | null;
+}
+
+export interface CarePet {
+  id: string; name: string; species: string; breed: string | null; allergies: string | null; medicalNotes: string | null;
+  feedingInstructions: string | null; specialInstructions: string | null; behaviorNotes: string | null; kennel: string | null;
+  medications: Medication[]; doses: Dose[]; lastCare: Record<string, string>; openIncidents: number;
+}
+
+export interface CareStay {
+  id: string; startsAt: string; endsAt: string; checkedInAt: string | null; serviceName: string;
+  customerName: string; customerPhone: string | null; pets: CarePet[];
+}
+
+export interface CareLogEntry {
+  id: string; kind: string; occurredAt: string; notes: string | null; meal: string | null; amountEaten: string | null;
+  medicationName: string | null; dose: string | null; medicationStatus: string | null; scheduledFor: string | null;
+  createdAt: string; voidedAt: string | null; voidReason: string | null; petId: string; petName: string;
+  recordedBy: string; voidedBy: string | null;
+}
+
+export interface Incident {
+  id: string; petId: string; petName: string; reservationId: string | null; occurredAt: string; category: string;
+  severity: "low" | "medium" | "high"; description: string; actionsTaken: string | null; ownerNotified: boolean;
+  followUpRequired: boolean; followUpNotes: string | null; createdAt: string; updatedAt: string;
+  resolvedAt: string | null; resolution: string | null; reportedBy: string; resolvedBy: string | null;
 }

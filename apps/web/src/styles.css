@@ -147,3 +147,20 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .login-page { min-height: 100%; display: grid; place-items: center; padding: 24px 16px; }
 .login-card { width: 100%; max-width: 400px; padding: 28px; }
 .login-card .brand { color: var(--primary); padding: 0 0 8px; }
+
+/* ---- Care ---- */
+.care-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+.care-pet + .care-pet { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; }
+.care-pet h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 1.05rem; }
+.quick-log { display: flex; flex-wrap: wrap; gap: 6px; }
+.dose { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 6px 0; }
+.dose + .dose { border-top: 1px dashed var(--border); }
+.last-care { font-size: 0.85rem; color: var(--text-muted); }
+.log-entry { display: flex; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.log-entry:last-child { border-bottom: 0; }
+.log-entry time { color: var(--text-muted); white-space: nowrap; min-width: 72px; font-size: 0.9rem; }
+.log-entry.voided { opacity: 0.6; }
+.log-entry.voided .what { text-decoration: line-through; }
+.severity-high { background: var(--danger-soft); color: var(--danger); }
+.severity-medium { background: var(--warning-soft); color: var(--warning); }
+.severity-low { background: var(--neutral-soft); color: var(--text-muted); }

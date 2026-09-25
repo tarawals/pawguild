@@ -3,6 +3,7 @@ import { formatMoney, PRICE_UNIT_LABELS, type PriceUnit } from "@pawguild/shared
 import { Link, useParams } from "react-router";
 import { get, type Reservation } from "../api";
 import { useCan } from "../auth";
+import { CareLogPanel } from "../components/CareLogPanel";
 import { CheckInPanel } from "../components/CheckInPanel";
 import { KennelAssignment } from "../components/KennelAssignment";
 import { StatusActions } from "../components/StatusActions";
@@ -37,6 +38,7 @@ export function ReservationDetailPage() {
           {alerts.length > 0 && <section aria-label="Care alerts">{alerts.map((a) => <div key={a.key} className="care-flag"><strong>{a.title}</strong>{a.text}</div>)}</section>}
           <CheckInPanel reservation={r} />
           <KennelAssignment reservation={r} />
+          <CareLogPanel reservation={r} />
           <Panel title="Pets" bodyless>
             <div className="table-wrap">
               <table>

@@ -18,7 +18,9 @@ export function Layout() {
         <nav className="nav" aria-label="Main">
           <NavLink to="/" end>Dashboard</NavLink>
           <div className="nav-section">Operations</div>
+          {canReadReservations && <NavLink to="/care">Today's care</NavLink>}
           {canReadReservations && <NavLink to="/reservations">Reservations</NavLink>}
+          {canReadReservations && <NavLink to="/incidents">Incidents</NavLink>}
           <div className="nav-section">Clients</div>
           {canReadCustomers && <NavLink to="/customers">Customers</NavLink>}
           {canReadPets && <NavLink to="/pets">Pets</NavLink>}

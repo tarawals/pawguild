@@ -5,6 +5,7 @@ import { get, post, type Pet } from "../api";
 import { useCan } from "../auth";
 import { EmptyState, ErrorAlert, fieldErrors, Loading, PageHeader, Panel, StatusBadge, TextField } from "../components/ui";
 import { daysUntil, formatDate, gramsToLbs } from "../units";
+import { MedicationsPanel } from "../components/MedicationsPanel";
 import { History } from "./History";
 
 function age(dob: string | null, estimate: boolean): string {
@@ -94,6 +95,7 @@ export function PetDetailPage() {
           {flags.length > 0 && (
             <section aria-label="Care alerts">{flags.map((f) => <div key={f.title} className="care-flag"><strong>{f.title}</strong>{f.text}</div>)}</section>
           )}
+          <MedicationsPanel petId={p.id} archived={archived} />
           <Panel title="Vaccinations">
             {p.vaccinations && p.vaccinations.length > 0 ? (
               <div className="table-wrap">

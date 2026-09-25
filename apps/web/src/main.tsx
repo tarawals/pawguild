@@ -5,6 +5,8 @@ import { BrowserRouter, Route, Routes } from "react-router";
 import { RequireAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { CapacityPage } from "./pages/Capacity";
+import { IncidentsPage } from "./pages/Incidents";
+import { TodayCarePage } from "./pages/TodayCare";
 import { CustomerDetailPage } from "./pages/CustomerDetail";
 import { CustomerFormPage } from "./pages/CustomerForm";
 import { CustomersPage } from "./pages/Customers";
@@ -46,6 +48,8 @@ createRoot(document.getElementById("root")!).render(
             <Route path="reservations/:id/edit" element={<ReservationFormPage />} />
             <Route path="services" element={<ServicesPage />} />
             <Route path="capacity" element={<CapacityPage />} />
+            <Route path="care" element={<TodayCarePage />} />
+            <Route path="incidents" element={<IncidentsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
