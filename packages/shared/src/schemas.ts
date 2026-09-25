@@ -105,6 +105,12 @@ export const serviceInput = z.object({
   priceUnit: z.enum(["per_day", "per_night", "per_visit"]),
   durationMinutes: z.number().int().positive().max(24 * 60).nullable().optional(),
   isActive: z.boolean().optional(),
+  /** Vaccines a pet of each species must have, valid through the stay. Replaces the whole set. */
+  vaccineRequirements: z.object({
+    dog: z.array(z.string().trim().min(1).max(100)).max(20),
+    cat: z.array(z.string().trim().min(1).max(100)).max(20),
+    other: z.array(z.string().trim().min(1).max(100)).max(20),
+  }).partial().optional(),
 });
 export type ServiceInput = z.input<typeof serviceInput>;
 
@@ -142,7 +148,11 @@ export const reservationUpdateInput = z
 
 export const reservationStatusInput = z.object({
   status: z.enum(["pending", "confirmed", "checked_in", "completed", "cancelled", "no_show"]),
+  /** Cancellation reason. */
   reason: optionalText(1000),
+  /** Check in despite missing/expired vaccinations. Requires stays:override_vaccinations and a reason. */
+  overrideVaccinations: z.boolean().optional(),
+  overrideReason: optionalText(1000),
 });
 
 export const reservationListQuery = z.object({
