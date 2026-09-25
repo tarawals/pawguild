@@ -43,3 +43,14 @@ describe("percentages", () => {
     expect(formatBps(700)).toBe("7%");
   });
 });
+
+import { invoiceBalance } from "./invoice";
+describe("invoice balance", () => {
+  it("accounts for credit notes, payments and refunds", () => {
+    expect(invoiceBalance({ totalCents: 20000, creditNotesCents: 0, paymentsCents: 5000, refundsCents: 0 })).toBe(15000);
+    // Paid in full, then a $55 credit note: the customer is owed $55.
+    expect(invoiceBalance({ totalCents: 20000, creditNotesCents: 5500, paymentsCents: 20000, refundsCents: 0 })).toBe(-5500);
+    // ...refunded: settled.
+    expect(invoiceBalance({ totalCents: 20000, creditNotesCents: 5500, paymentsCents: 20000, refundsCents: 5500 })).toBe(0);
+  });
+});

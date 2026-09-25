@@ -67,3 +67,13 @@ export const PAYMENT_METHODS = ["card", "cash", "check", "other"] as const;
 export const PAYMENT_METHOD_LABELS: Record<(typeof PAYMENT_METHODS)[number], string> = {
   card: "Card", cash: "Cash", check: "Check", other: "Other",
 };
+
+/**
+ * What the customer still owes on an issued invoice. Negative means they overpaid, and the
+ * difference must be refunded or moved to account credit.
+ */
+export function invoiceBalance(args: { totalCents: Cents; creditNotesCents: Cents; paymentsCents: Cents; refundsCents: Cents }): Cents {
+  return assertCents(args.totalCents - args.creditNotesCents - (args.paymentsCents - args.refundsCents));
+}
+
+export const REFUND_METHOD_LABELS = { ...PAYMENT_METHOD_LABELS, account_credit: "Account credit" } as const;

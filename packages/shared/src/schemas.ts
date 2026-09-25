@@ -274,3 +274,31 @@ export const paymentInput = z.object({
   reference: optionalText(200),
   receivedAt: z.iso.datetime({ offset: true }).optional(),
 });
+
+const reason = z.string().trim().min(1, "Give a reason").max(1000);
+const positiveCents = z.number().int("Amounts are in whole cents").min(1, "Enter an amount greater than zero").max(100_000_000);
+const moneyMethod = z.enum(["card", "cash", "check", "other"]);
+
+export const creditNoteInput = z.object({ amountCents: positiveCents, reason });
+
+/** Refund an invoice overpayment: back to the customer, or onto their account credit. */
+export const invoiceRefundInput = z.object({
+  amountCents: positiveCents,
+  method: z.enum(["card", "cash", "check", "other", "account_credit"]),
+  reference: optionalText(200),
+  reason,
+});
+
+/** Money taken on account (deposit or prepayment). */
+export const creditReceiveInput = z.object({
+  amountCents: positiveCents,
+  method: moneyMethod,
+  reference: optionalText(200),
+  note: optionalText(500),
+  reservationId: z.uuid().optional(),
+});
+
+export const creditApplyInput = z.object({ amountCents: positiveCents });
+
+/** Pay account credit back out to the customer. */
+export const creditRefundInput = z.object({ amountCents: positiveCents, method: moneyMethod, reference: optionalText(200), reason });
