@@ -94,3 +94,61 @@ export const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
+
+// ---- Services & reservations --------------------------------------------------------------
+
+export const serviceInput = z.object({
+  name: z.string().trim().min(1, "Service name is required").max(100),
+  category: z.enum(["daycare", "boarding", "grooming", "training", "add_on", "other"]),
+  description: optionalText(1000),
+  priceCents: z.number().int("Price must be in whole cents").min(0, "Price can't be negative").max(100_000_000),
+  priceUnit: z.enum(["per_day", "per_night", "per_visit"]),
+  durationMinutes: z.number().int().positive().max(24 * 60).nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+export type ServiceInput = z.input<typeof serviceInput>;
+
+const instant = z.iso.datetime({ offset: true, message: "Enter a valid date and time" });
+
+export const reservationInput = z
+  .object({
+    customerId: z.uuid(),
+    locationId: z.uuid(),
+    serviceId: z.uuid(),
+    petIds: z.array(z.uuid()).min(1, "Choose at least one pet").max(20)
+      .refine((ids) => new Set(ids).size === ids.length, "A pet can only be added once"),
+    startsAt: instant,
+    endsAt: instant,
+    notes: optionalText(5000),
+    status: z.enum(["pending", "confirmed"]).default("pending"),
+  })
+  .refine((r) => new Date(r.endsAt) > new Date(r.startsAt), {
+    message: "End must be after the start", path: ["endsAt"],
+  });
+export type ReservationInput = z.input<typeof reservationInput>;
+
+/** Reschedule / edit. Customer, service and location are fixed once booked (cancel and rebook instead). */
+export const reservationUpdateInput = z
+  .object({
+    petIds: z.array(z.uuid()).min(1, "Choose at least one pet").max(20)
+      .refine((ids) => new Set(ids).size === ids.length, "A pet can only be added once").optional(),
+    startsAt: instant.optional(),
+    endsAt: instant.optional(),
+    notes: optionalText(5000),
+  });
+
+export const reservationStatusInput = z.object({
+  status: z.enum(["pending", "confirmed", "checked_in", "completed", "cancelled", "no_show"]),
+  reason: optionalText(1000),
+});
+
+export const reservationListQuery = z.object({
+  from: instant.optional(),
+  to: instant.optional(),
+  status: z.enum(["pending", "confirmed", "checked_in", "completed", "cancelled", "no_show"]).optional(),
+  customerId: z.uuid().optional(),
+  petId: z.uuid().optional(),
+  locationId: z.uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
