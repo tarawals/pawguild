@@ -3,6 +3,7 @@
  * All names are fictional.
  */
 import { fileURLToPath } from "node:url";
+import { sql } from "kysely";
 import { hashPassword } from "../auth/password";
 import { createDb } from "./index";
 
@@ -78,6 +79,13 @@ export async function seed(connectionString: string, password: string) {
         for (const pet of pets) {
           const p = await trx.insertInto("pets").values({ ...pet, organizationId: org.id, customerId: customer.id }).returning("id").executeTakeFirstOrThrow();
           const soon = new Date(Date.now() + (pet.name === "Otis" ? 10 : 200) * 86400_000).toISOString().slice(0, 10);
+          if (pet.name === "Juniper") {
+            await trx.insertInto("petMedications").values({
+              organizationId: org.id, petId: p.id, name: "Ofloxacin eye drops", dosage: "1 drop each eye",
+              instructions: "Hold head gently; reward after.", times: sql`'{08:00,20:00}'::time[]` as unknown as string[],
+              createdByUserId: owner.id,
+            }).execute();
+          }
           // Otis is deliberately missing DHPP so the demo shows check-in verification.
           await trx.insertInto("petVaccinations").values([
             { organizationId: org.id, petId: p.id, vaccine: "Rabies", expiresOn: soon, recordedByUserId: owner.id },

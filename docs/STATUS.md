@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-09-25 (session 4: check-in verification)_
+_Last updated: 2026-09-25 (session 5: care records)_
 
 ## Built and tested
 
@@ -17,14 +17,17 @@ _Last updated: 2026-09-25 (session 4: check-in verification)_
 | **Capacity limits** (daycare/day, boarding/night per location; manager override, audited) | ✅ | ✅ | `locations:manage` to set; `reservations:override_capacity` to exceed | Kennels & capacity page; override option in booking form | unit + integration + e2e |
 | **Kennels & rooms** (resources with pet capacity; per-pet assignment with availability) | ✅ | ✅ | `resources:manage` to set up; assign with `reservations:write` or `stays:check_in_out` | Kennels & capacity page; Kennels panel on reservation | integration + e2e |
 | **Check-in verification** (required vaccines per service and species, valid through the stay; manager override with reason, audited; kennel reminder) | ✅ | ✅ | `stays:check_in_out`; `stays:override_vaccinations` to override | Check-in panel on reservation (care alerts → vaccinations → kennels); dashboard flags arrivals needing vaccines; requirements on Services | unit + integration + e2e |
-| Dashboard (occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
+| **Medications** (standing orders with scheduled times or as-needed; discontinue, never delete) | ✅ | ✅ | `pets:write` to manage | Medications panel on pet page | unit + integration + e2e |
+| **Care log** (feeding, medication given/refused/skipped, potty, walk, play, rest, notes; void with reason, never edit) | ✅ | ✅ | `care:record` | Today's care page with one-tap logging and doses due; Care log panel on reservation | integration + e2e |
+| **Incidents** (report, follow up, manager resolves and locks) | ✅ | ✅ | `incidents:record`; `incidents:resolve` (managers) | Report from Today's care; Incidents page | integration + e2e |
+| Dashboard (medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
 | Audit log (append-only, field diffs) | ✅ | read endpoint | `audit:read` | history panels (customer, pet, reservation) | integration |
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results: typecheck ✅, 28 shared unit tests ✅, 47 API integration tests ✅,
-4 web tests ✅, 11 Playwright e2e tests ✅. An exploratory browser QA pass against an upgraded
-copy of the previous version's database also passed (no console errors).
+Latest check results: typecheck ✅, 31 shared unit tests ✅, 57 API integration tests ✅,
+4 web tests ✅, 13 Playwright e2e tests ✅. An exploratory browser QA pass (12 scenarios) against an
+upgraded copy of the previous version's database also passed, with no console errors.
 
 ## Not built yet (in scope, by priority)
 
@@ -47,6 +50,10 @@ copy of the previous version's database also passed (no console errors).
 - The double-booking rule is enforced in the API with row locks, not by a database constraint.
   A future migration could add an exclusion constraint (`btree_gist`).
 - Capacity and kennel rules are enforced in the API under row locks, not by database constraints.
+- Dates and times display in the browser's time zone, while medication times and "today" use the
+  business's time zone. These match when staff computers are set to the business's time zone.
+  Showing everything in the location's zone is future work.
+- Feeding has no schedule (only instructions and a log), so feeding isn't in a "due" list yet.
 - Vaccine names are free text, matched case-insensitively. "Bordetella" and "Kennel cough" won't
   match each other. A managed vaccine list would fix that.
 - Upgraded installs have no vaccination requirements until a manager sets them on each service.
@@ -65,7 +72,10 @@ copy of the previous version's database also passed (no console errors).
 
 ## Next recommended step
 
-**Care records for current stays:** a "Today's care" view of checked-in pets where staff log
-feeding, medication (dose, time, who gave it, never overwritten; corrections are new entries),
-activities and incidents, plus each pet's standing feeding and medication instructions. This feeds
-the dashboard's "medication due" list and the check-out review.
+**Billing, part 1 (invoices):** generate an invoice from a reservation (stay lines from the
+locked-in price, with quantity and pets), allow add-on lines from services, then tax (basis
+points) and discounts. Invoices get draft and issued states, and an issued invoice is immutable
+(corrections are credit notes). Then record payments and derive the customer's balance.
+Money stays in integer cents throughout (`packages/shared/src/money.ts`).
+**Decision needed before starting:** tax rules. Is there one tax rate per location, and are
+services taxable individually? Tax rules vary by state.

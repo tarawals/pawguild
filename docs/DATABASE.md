@@ -83,6 +83,21 @@ record whose latest `expires_on` is on or after the stay's last local day. Recor
 mid-stay count as failing. Names match case-insensitively. Managers can override with a reason
 (`stays:override_vaccinations`), recorded as `vaccinationOverride` in the check-in audit entry.
 
+## 0005_care_records
+
+| Table | Purpose | Notes |
+|---|---|---|
+| `pet_medications` | Standing medication orders | `times time[]` holds local times of day (empty means as needed); discontinued, never deleted |
+| `care_logs` | Everything recorded during a stay | `kind` is feeding, medication, potty, walk, play, rest, grooming or note; kind-specific columns are enforced by CHECKs; medication name and dose are snapshotted; `scheduled_for` links a dose to its slot and is unique per medication while not voided |
+| `incidents` | Injury, illness, behavior and other events | the original description is immutable; follow-up fields can be updated; resolution (managers) locks the record |
+
+- Care entries and incidents reference `reservation_pets (organization_id, reservation_id, pet_id)`, so
+  they can only be recorded for a pet that is on that stay.
+- The app role may only INSERT these rows and UPDATE the void, discontinue, follow-up and resolution
+  columns. Rewriting content or deleting is refused by the database (covered by a test).
+- Scheduled doses (`apps/api/src/lib/care.ts`) are computed for the local "today" in the location's
+  time zone, limited to the part of the day the pet is in our care. A dose is overdue 30 minutes after its time.
+
 Tables without RLS: `users` and `sessions`. They are identity data that login needs before a
 tenant is known, and the app only reaches them by id, email or token hash.
 `organizations` and `memberships` have RLS that also lets a user see their own memberships.
