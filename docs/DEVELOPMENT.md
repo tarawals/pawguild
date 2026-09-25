@@ -17,6 +17,16 @@ npm run db:seed
 
 Run `npm run dev:api` and `npm run dev:web` in two terminals, then open http://127.0.0.1:5173.
 
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| Browser says it can't connect to `127.0.0.1:5173` | `npm run dev:web` isn't running, or it exited with an error; check that terminal. The dev server binds to `127.0.0.1:5173` exactly. |
+| `Port 5173 is already in use` | Another dev server is still running. Close it, or find it with `lsof -i :5173` (macOS/Linux) or `netstat -ano \| findstr 5173` (Windows). |
+| Page loads but sign-in says "Can't reach PawGuild" | The API isn't running. Start `npm run dev:api` and check it logs `Server listening at http://127.0.0.1:3001`. |
+| `ECONNREFUSED 127.0.0.1:5432` or `password authentication failed` | PostgreSQL isn't running, or the roles and databases weren't created. Re-run step 3 of the setup. |
+| `Invalid environment configuration` | `apps/api/.env` is missing. Copy it from `.env.example`. |
+
 ## Environment variables (apps/api/.env)
 
 | Variable | Required | Description |
