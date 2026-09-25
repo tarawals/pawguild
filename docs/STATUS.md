@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-09-25 (session 2: services and reservations)_
+_Last updated: 2026-09-25 (session 3: capacity and kennels)_
 
 ## Built and tested
 
@@ -14,13 +14,15 @@ _Last updated: 2026-09-25 (session 2: services and reservations)_
 | Vaccinations (record, void) | ✅ | ✅ | ✅ | on pet page | integration + e2e |
 | **Services** (configurable, priced, deactivatable) | ✅ | ✅ | `services:manage` | Services page | integration |
 | **Reservations** (multi-pet, price snapshot, reschedule, status lifecycle, cancel with reason, double-booking prevention) | ✅ | ✅ | `reservations:write`, check-in/out needs `stays:check_in_out` | list, booking form with live estimate, detail with status actions, customer panel | unit + integration + e2e |
-| Dashboard (today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
+| **Capacity limits** (daycare/day, boarding/night per location; manager override, audited) | ✅ | ✅ | `locations:manage` to set; `reservations:override_capacity` to exceed | Kennels & capacity page; override option in booking form | unit + integration + e2e |
+| **Kennels & rooms** (resources with pet capacity; per-pet assignment with availability) | ✅ | ✅ | `resources:manage` to set up; assign with `reservations:write` or `stays:check_in_out` | Kennels & capacity page; Kennels panel on reservation | integration + e2e |
+| Dashboard (occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
 | Audit log (append-only, field diffs) | ✅ | read endpoint | `audit:read` | history panels (customer, pet, reservation) | integration |
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results: typecheck ✅, 18 shared unit tests ✅, 30 API integration tests ✅,
-4 web tests ✅, 4 Playwright e2e tests ✅.
+Latest check results: typecheck ✅, 23 shared unit tests ✅, 40 API integration tests ✅,
+4 web tests ✅, 7 Playwright e2e tests ✅.
 
 ## Not built yet (in scope, by priority)
 
@@ -42,7 +44,11 @@ Latest check results: typecheck ✅, 18 shared unit tests ✅, 30 API integratio
 - **No login rate limiting or lockout yet.** Add before any internet-facing deployment.
 - The double-booking rule is enforced in the API with row locks, not by a database constraint.
   A future migration could add an exclusion constraint (`btree_gist`).
-- Capacity isn't enforced yet. Staff can overbook a location.
+- Capacity and kennel rules are enforced in the API under row locks, not by database constraints.
+- Capacity counts pets, not size. Large and small dogs count the same.
+- Grooming isn't capacity-limited per location; use grooming stations as resources for now.
+- Kennel availability counts any pet assigned during the requested window. That's conservative
+  when two short stays share a kennel back to back within the window.
 - The booking form reads date/time inputs in the browser's timezone. Billable nights and days
   use the location's timezone, falling back to the organization's. These match as long as staff
   work in the business's timezone.
@@ -54,8 +60,7 @@ Latest check results: typecheck ✅, 18 shared unit tests ✅, 30 API integratio
 
 ## Next recommended step
 
-**Capacity + resources:** a migration for `resources` (kennel, room, run, grooming station per
-location) and `reservation_resources`. Then capacity rules: the daycare headcount per location and
-day, and one active stay per boarding resource. Enforce them in the reservation create and
-reschedule paths with row locking, as the double-booking check does. Show occupancy on the
-dashboard. After that, the guided check-in flow with vaccination verification.
+**Guided check-in:** from an arrival, show a short check-in panel that verifies required
+vaccinations are current (block or warn per service), confirms or assigns a kennel for boarding,
+and surfaces care alerts. Then check-out with a care-log and charges review, which leads into
+care records and billing.

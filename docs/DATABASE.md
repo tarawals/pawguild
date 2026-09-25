@@ -25,7 +25,7 @@ PostgreSQL 14+. Schema changes are plain SQL files in `apps/api/migrations/`, ap
 | Table | Purpose | Notes |
 |---|---|---|
 | `organizations` | A business (tenant) | timezone, currency |
-| `locations` | Physical sites | `daycare_capacity`, `is_active` |
+| `locations` | Physical sites | `is_active`; `daycare_capacity` was removed in 0003 (moved to `location_capacities`) |
 | `location_hours` | Weekly opening hours | one row per weekday; 0 = Sunday |
 | `location_closures` | Holidays and closures | one per location per date |
 | `users` | Global staff login identity | email unique, lowercase; scrypt hash |
@@ -52,6 +52,25 @@ Rules enforced in the API (not yet in the database):
 - Status changes must pass `assertTransition` (see `packages/shared/src/reservation-status.ts`).
 - Only `pending`/`confirmed` reservations can be edited. Customer, service and location are
   fixed; to change them, cancel and rebook.
+
+## 0003_capacity_resources
+
+| Table / column | Purpose | Notes |
+|---|---|---|
+| `location_capacities` | Per-location limits | one row per `(location, category)`, where category is `daycare` (pets per local day) or `boarding` (pets per local night); no row = no limit |
+| `resources` | Kennels, suites, rooms, runs, play areas, grooming stations | `capacity` = pets it can hold at once; `UNIQUE (location_id, name)`; deactivate with `is_active` |
+| `reservation_pets.resource_id` | The kennel or room a pet is assigned to | composite FK to `resources` |
+
+**Destructive change (documented):** `locations.daycare_capacity` was dropped after its values were copied into `location_capacities`.
+
+Rules enforced in the API:
+- Capacity periods match `packages/shared/src/capacity.ts` (`daysCovered`, `nightsCovered`) and the SQL in
+  `apps/api/src/lib/capacity.ts`. Only `pending`, `confirmed` and `checked_in` reservations count.
+- Booking and rescheduling lock the location row (`FOR UPDATE`), so concurrent bookings can't both
+  take the last space. Assignments lock the resource rows the same way.
+- Over-capacity bookings need `reservations:override_capacity` (managers and above) and are recorded
+  in the audit entry as `capacityOverride`.
+- A resource must be at the reservation's location, and overlapping active stays can't hold more pets than its `capacity`.
 
 Tables without RLS: `users` and `sessions`. They are identity data that login needs before a
 tenant is known, and the app only reaches them by id, email or token hash.
