@@ -60,3 +60,23 @@ test("owner overrides capacity and assigns a kennel", async ({ page }) => {
   await expect(page.getByRole("region", { name: "Kennels" }).getByLabel("Otis")).toHaveValue(/.+/);
   await expect(page.getByRole("region", { name: "History" })).toContainText("Resources assigned");
 });
+
+test("a pet's kennel stays visible after the kennel is taken out of use", async ({ page }) => {
+  await signIn(page, "owner@harborhounds.example");
+  await page.goto("/reservations?from=2026-11-02&to=2026-11-02");
+  await page.getByRole("row", { name: /Otis/ }).getByRole("link", { name: /Nov 2/ }).click();
+  const reservationUrl = page.url();
+  const otis = page.getByRole("region", { name: "Kennels" }).getByLabel("Otis");
+  await expect(otis).toBeEnabled();
+  await expect(otis.locator("option:checked")).toContainText("Kennel 1");
+
+  await page.goto("/capacity");
+  await page.getByRole("button", { name: "Edit Kennel 1", exact: true }).click();
+  await page.getByLabel("In use").uncheck();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("row", { name: /^Kennel 1 / })).toContainText("Not in use");
+
+  await page.goto(reservationUrl);
+  await expect(otis).toBeEnabled();
+  await expect(otis.locator("option:checked")).toHaveText("Kennel 1 (not in use)");
+});

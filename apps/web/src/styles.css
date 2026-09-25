@@ -72,7 +72,7 @@ a { color: var(--primary); }
 .panel-body { padding: 16px; }
 .stack { display: flex; flex-direction: column; gap: 16px; }
 .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .stat { padding: 14px 16px; }
 .stat .label { color: var(--text-muted); font-size: 0.85rem; }
 .stat .value { font-size: 1.6rem; font-weight: 650; }

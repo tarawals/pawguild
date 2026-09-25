@@ -45,14 +45,20 @@ export function KennelAssignment({ reservation }: { reservation: Reservation }) 
       </Panel>
     );
   }
-  const items = availability.data?.items ?? [];
+  const available = availability.data?.items ?? [];
+  // Keep each pet's current kennel selectable even if it has since been taken out of use, so the
+  // dropdown never misleadingly shows "Not assigned" for a pet that is assigned.
+  const retired = reservation.pets
+    .filter((p) => p.resourceId && !available.some((a) => a.id === p.resourceId))
+    .filter((p, i, all) => all.findIndex((x) => x.resourceId === p.resourceId) === i)
+    .map((p) => ({ id: p.resourceId!, name: p.resourceName ?? "Unknown", retired: true }));
   // Spaces this reservation's own pets would take in the current selection.
   const takenHere = (id: string) => Object.values(choice).filter((v) => v === id).length;
 
   function onSubmit(e: FormEvent) { e.preventDefault(); save.mutate(); }
   return (
     <Panel title="Kennels">
-      {items.length === 0 && availability.isSuccess ? (
+      {available.length === 0 && retired.length === 0 && availability.isSuccess ? (
         <p className="muted" style={{ margin: 0 }}>No kennels or rooms are set up for {reservation.location.name}.</p>
       ) : (
         <form onSubmit={onSubmit} noValidate className="stack">
@@ -61,9 +67,13 @@ export function KennelAssignment({ reservation }: { reservation: Reservation }) 
             {reservation.pets.map((p) => (
               <div className="field" key={p.id}>
                 <label htmlFor={`kennel-${p.id}`}>{p.name}</label>
-                <select id={`kennel-${p.id}`} value={choice[p.id] ?? ""} onChange={(e) => setChoice({ ...choice, [p.id]: e.target.value })}>
-                  <option value="">Not assigned</option>
-                  {items.map((r) => {
+                <select id={`kennel-${p.id}`} value={choice[p.id] ?? ""} disabled={availability.isPending}
+                  aria-busy={availability.isPending} onChange={(e) => setChoice({ ...choice, [p.id]: e.target.value })}>
+                  <option value="">{availability.isPending ? "Loading kennels…" : "Not assigned"}</option>
+                  {retired.map((r) => (
+                    <option key={r.id} value={r.id} disabled={choice[p.id] !== r.id}>{r.name} (not in use)</option>
+                  ))}
+                  {available.map((r) => {
                     const free = r.available - takenHere(r.id) + (choice[p.id] === r.id ? 1 : 0);
                     const full = free <= 0 && choice[p.id] !== r.id;
                     return (
