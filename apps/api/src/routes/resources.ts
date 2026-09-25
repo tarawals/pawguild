@@ -79,6 +79,8 @@ export const resourceRoutes: FastifyPluginAsync = async (app) => {
     const input = resourceInput.omit({ locationId: true }).partial().parse(req.body);
     return withTenant(app.db, req.auth, async (trx) => {
       const before = await getResource(trx, id);
+      // An empty update (nothing changed) is a no-op rather than an SQL error.
+      if (Object.keys(input).length === 0) return before;
       const after = await trx.updateTable("resources").set(input).where("id", "=", id).returning(COLUMNS).executeTakeFirstOrThrow();
       const changes = diff(before, after);
       if (Object.keys(changes).length > 0) {

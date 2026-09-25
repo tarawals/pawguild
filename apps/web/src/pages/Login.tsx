@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { post } from "../api";
 import { ErrorAlert, TextField } from "../components/ui";
 
@@ -9,13 +9,17 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
+  const [params] = useSearchParams();
+  const expired = params.get("expired") === "1";
   const qc = useQueryClient();
   const login = useMutation({
     mutationFn: () => post("/api/auth/login", { email, password }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["me"] });
-      const from = (location.state as { from?: string } | null)?.from;
-      navigate(from && from !== "/login" ? from : "/", { replace: true });
+      const from = (location.state as { from?: string } | null)?.from ?? params.get("from") ?? undefined;
+      // Only follow same-site paths (never an absolute URL) after sign-in.
+      const safe = from && from.startsWith("/") && !from.startsWith("//") && !from.startsWith("/login") ? from : "/";
+      navigate(safe, { replace: true });
     },
   });
 
@@ -30,6 +34,7 @@ export function LoginPage() {
         <div className="brand"><img src="/favicon.svg" alt="" /> PawGuild</div>
         <h1>Sign in</h1>
         <p className="muted">Staff access for your pet-care business.</p>
+        {expired && !login.error && <div role="status" className="alert alert-warning">Your session ended. Please sign in again to continue.</div>}
         <ErrorAlert error={login.error} />
         <form className="stack" onSubmit={onSubmit} noValidate>
           <TextField label="Email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />

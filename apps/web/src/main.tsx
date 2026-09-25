@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
@@ -25,7 +25,24 @@ import { ServicesPage } from "./pages/Services";
 import { ApiError } from "./api";
 import "./styles.css";
 
-const queryClient = new QueryClient({
+/**
+ * If the server says the session has ended (expired, signed out elsewhere, or the staff member was
+ * deactivated), go back to sign-in and return to this page afterwards, rather than leaving the user
+ * on a page full of errors.
+ */
+function onApiError(err: unknown, query?: { queryKey: readonly unknown[] }) {
+  // The "me" check is handled by <RequireAuth>, which sends never-signed-in visitors to sign-in.
+  if (query?.queryKey[0] === "me") return;
+  if (err instanceof ApiError && err.status === 401 && window.location.pathname !== "/login") {
+    queryClient.clear();
+    const from = window.location.pathname + window.location.search;
+    window.location.assign(`/login?expired=1&from=${encodeURIComponent(from)}`);
+  }
+}
+
+const queryClient: QueryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: (err, query) => onApiError(err, query) }),
+  mutationCache: new MutationCache({ onError: (err) => onApiError(err) }),
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: true,

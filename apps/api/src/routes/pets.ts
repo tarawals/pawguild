@@ -75,6 +75,8 @@ export const petRoutes: FastifyPluginAsync = async (app) => {
     const input = petUpdateInput.parse(req.body);
     return withTenant(app.db, req.auth, async (trx) => {
       const before = await getPet(trx, id);
+      // An empty update (nothing changed) is a no-op rather than an SQL error.
+      if (Object.keys(input).length === 0) return before;
       const after = await trx.updateTable("pets").set(input).where("id", "=", id)
         .returning(PET_COLUMNS).executeTakeFirstOrThrow();
       const changes = diff(before, after);

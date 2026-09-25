@@ -87,6 +87,8 @@ export const customerRoutes: FastifyPluginAsync = async (app) => {
     const input = customerInput.partial().parse(req.body);
     return withTenant(app.db, req.auth, async (trx) => {
       const before = await getCustomer(trx, id);
+      // An empty update (nothing changed) is a no-op rather than an SQL error.
+      if (Object.keys(input).length === 0) return before;
       const after = await trx.updateTable("customers").set(input).where("id", "=", id)
         .returning(CUSTOMER_COLUMNS).executeTakeFirstOrThrow();
       const changes = diff(before, after);
