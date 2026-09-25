@@ -14,6 +14,12 @@ describe("permissions", () => {
     expect(hasPermission("front_desk", "billing:refund")).toBe(false);
     expect(hasPermission("manager", "billing:refund")).toBe(true);
   });
+  it("only lets managers and above book over capacity", () => {
+    for (const role of ["front_desk", "shift_lead", "groomer", "care_attendant", "employee"] as const)
+      expect(hasPermission(role, "reservations:override_capacity")).toBe(false);
+    for (const role of ["owner", "administrator", "general_manager", "location_manager", "manager"] as const)
+      expect(hasPermission(role, "reservations:override_capacity")).toBe(true);
+  });
   it("defines only known permissions for every role", () => {
     for (const role of ROLES)
       for (const p of ROLE_PERMISSIONS[role]) expect(PERMISSIONS).toContain(p);

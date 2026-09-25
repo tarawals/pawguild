@@ -10,6 +10,7 @@ export const PERMISSIONS = [
   "pets:write",
   "reservations:read",
   "reservations:write",
+  "reservations:override_capacity",
   "stays:check_in_out",
   "care:record",
   "incidents:record",
@@ -81,6 +82,7 @@ const CARE: readonly Permission[] = [
 
 const MANAGER: readonly Permission[] = [
   ...FRONT_DESK,
+  "reservations:override_capacity",
   "services:manage",
   "resources:manage",
   "billing:refund",

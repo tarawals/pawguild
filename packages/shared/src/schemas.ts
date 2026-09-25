@@ -121,6 +121,8 @@ export const reservationInput = z
     endsAt: instant,
     notes: optionalText(5000),
     status: z.enum(["pending", "confirmed"]).default("pending"),
+    /** Book even when a capacity limit is reached. Requires reservations:override_capacity. */
+    overrideCapacity: z.boolean().optional(),
   })
   .refine((r) => new Date(r.endsAt) > new Date(r.startsAt), {
     message: "End must be after the start", path: ["endsAt"],
@@ -135,6 +137,7 @@ export const reservationUpdateInput = z
     startsAt: instant.optional(),
     endsAt: instant.optional(),
     notes: optionalText(5000),
+    overrideCapacity: z.boolean().optional(),
   });
 
 export const reservationStatusInput = z.object({
@@ -151,4 +154,23 @@ export const reservationListQuery = z.object({
   locationId: z.uuid().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(100),
   offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const resourceInput = z.object({
+  locationId: z.uuid(),
+  name: z.string().trim().min(1, "Name is required").max(100),
+  kind: z.enum(["kennel", "suite", "room", "run", "play_area", "grooming_station", "other"]),
+  capacity: z.number().int().min(1, "Must hold at least 1 pet").max(100),
+  notes: optionalText(1000),
+  isActive: z.boolean().optional(),
+});
+
+export const capacityLimitsInput = z.object({
+  /** null = no limit. */
+  daycare: z.number().int().min(0).max(10_000).nullable(),
+  boarding: z.number().int().min(0).max(10_000).nullable(),
+});
+
+export const assignmentsInput = z.object({
+  assignments: z.array(z.object({ petId: z.uuid(), resourceId: z.uuid().nullable() })).min(1).max(20),
 });
