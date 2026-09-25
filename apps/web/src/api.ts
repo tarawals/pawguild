@@ -96,6 +96,7 @@ export interface AuditEntry {
 export interface Service {
   id: string; name: string; category: string; description: string | null; priceCents: number;
   priceUnit: string; durationMinutes: number | null; isActive: boolean;
+  vaccineRequirements: { dog: string[]; cat: string[]; other: string[] };
 }
 
 export interface Location {
@@ -114,6 +115,8 @@ export interface Occupancy { period: string; booked: number; limit: number | nul
 export interface ReservationListItem {
   id: string; status: string; startsAt: string; endsAt: string; customerId: string; customerName: string;
   serviceName: string; serviceCategory?: string; locationName?: string; petNames: string[];
+  /** Dashboard arrivals only: pets that would fail check-in vaccination verification. */
+  petsNeedingVaccinations?: string[];
 }
 
 export interface Reservation {
@@ -126,6 +129,10 @@ export interface Reservation {
   pets: {
     id: string; name: string; species: string; breed: string | null; allergies: string | null; medicalNotes: string | null;
     resourceId: string | null; resourceName: string | null;
+  }[];
+  vaccinationCheck: {
+    petId: string; petName: string; ok: boolean;
+    checks: { vaccine: string; state: "current" | "missing" | "expired" | "expires_during_stay"; expiresOn: string | null }[];
   }[];
   allowedTransitions: string[];
   estimate: { quantity: number; petCount: number; unitPriceCents: number; totalCents: number };

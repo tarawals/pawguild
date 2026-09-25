@@ -26,6 +26,7 @@ function VaccinationForm({ petId }: { petId: string }) {
       qc.invalidateQueries({ queryKey: ["pet", petId] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["audit"] });
+      qc.invalidateQueries({ queryKey: ["reservation"] });
     },
   });
   const err = fieldErrors(add.error);
@@ -54,6 +55,7 @@ export function PetDetailPage() {
     qc.invalidateQueries({ queryKey: ["pets"] });
     qc.invalidateQueries({ queryKey: ["audit"] });
     qc.invalidateQueries({ queryKey: ["dashboard"] });
+    qc.invalidateQueries({ queryKey: ["reservation"] });
   };
   const archive = useMutation({ mutationFn: (action: "archive" | "restore") => post(`/api/pets/${id}/${action}`), onSuccess: refresh });
   const voidVax = useMutation({ mutationFn: (vid: string) => post(`/api/pets/${id}/vaccinations/${vid}/void`), onSuccess: refresh });

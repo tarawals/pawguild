@@ -36,7 +36,12 @@ function StayTable({ rows, kind }: { rows: ReservationListItem[]; kind: "arrival
                 <td>{r.serviceName}</td>
                 <td className="row-actions">
                   {kind === "arrivals" && r.status === "pending" && <ReservationStatusBadge status="pending" />}
-                  {canStay && kind === "arrivals" && r.status === "confirmed" && <QuickAction r={r} to="checked_in" label="Check in" />}
+                  {kind === "arrivals" && r.petsNeedingVaccinations && r.petsNeedingVaccinations.length > 0 ? (
+                    <>
+                      <span className="badge badge-danger">Vaccines needed</span>{" "}
+                      <Link className="btn btn-small" to={`/reservations/${r.id}`} aria-label={`Review vaccinations for ${r.petNames.join(", ")}`}>Review</Link>
+                    </>
+                  ) : canStay && kind === "arrivals" && r.status === "confirmed" && <QuickAction r={r} to="checked_in" label="Check in" />}
                   {canStay && kind === "departures" && <QuickAction r={r} to="completed" label="Check out" />}
                 </td>
               </tr>

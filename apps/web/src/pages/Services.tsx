@@ -12,13 +12,18 @@ const DEFAULT_UNIT: Record<ServiceCategory, PriceUnit> = {
   daycare: "per_day", boarding: "per_night", grooming: "per_visit", training: "per_visit", add_on: "per_visit", other: "per_visit",
 };
 
-const emptyForm = { name: "", category: "daycare", price: "", priceUnit: "per_day", durationMinutes: "", description: "", isActive: true };
+const emptyForm = {
+  name: "", category: "daycare", price: "", priceUnit: "per_day", durationMinutes: "", description: "", isActive: true,
+  dogVaccines: "", catVaccines: "",
+};
+const splitList = (v: string) => v.split(",").map((x) => x.trim()).filter(Boolean);
 type FormState = typeof emptyForm;
 
 function toForm(s: Service): FormState {
   return {
     name: s.name, category: s.category, price: (s.priceCents / 100).toFixed(2), priceUnit: s.priceUnit,
     durationMinutes: s.durationMinutes ? String(s.durationMinutes) : "", description: s.description ?? "", isActive: s.isActive,
+    dogVaccines: s.vaccineRequirements.dog.join(", "), catVaccines: s.vaccineRequirements.cat.join(", "),
   };
 }
 
@@ -34,6 +39,7 @@ function ServiceForm({ service, onDone }: { service?: Service; onDone: () => voi
       const body = {
         name: form.name, category: form.category, priceCents, priceUnit: form.priceUnit, description: form.description,
         durationMinutes: form.durationMinutes ? Number(form.durationMinutes) : null, isActive: form.isActive,
+        vaccineRequirements: { dog: splitList(form.dogVaccines), cat: splitList(form.catVaccines) },
       };
       return service ? patch(`/api/services/${service.id}`, body) : post("/api/services", body);
     },
@@ -61,6 +67,8 @@ function ServiceForm({ service, onDone }: { service?: Service; onDone: () => voi
         </SelectField>
         <TextField label="Duration (minutes)" inputMode="numeric" hint="For timed appointments such as grooming" {...bind("durationMinutes")} error={err("durationMinutes")} />
         <TextArea label="Description" className="span-all" {...bind("description")} error={err("description")} />
+        <TextField label="Vaccines required for dogs" hint="Separate with commas, e.g. Rabies, DHPP, Bordetella" {...bind("dogVaccines")} error={err("vaccineRequirements.dog")} />
+        <TextField label="Vaccines required for cats" hint="e.g. Rabies, FVRCP" {...bind("catVaccines")} error={err("vaccineRequirements.cat")} />
         {service && <Checkbox label="Offered (uncheck to stop new bookings)" checked={form.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} />}
       </div>
       <div className="actions">
@@ -92,15 +100,21 @@ export function ServicesPage() {
           ) : services.data && (
             <div className="table-wrap">
               <table>
-                <thead><tr><th scope="col">Service</th><th scope="col">Category</th><th scope="col">Price</th><th scope="col">Status</th>{canManage && <th scope="col"><span className="visually-hidden">Actions</span></th>}</tr></thead>
+                <thead><tr><th scope="col">Service</th><th scope="col">Category</th><th scope="col">Price</th><th scope="col">Vaccines required</th><th scope="col">Status</th>{canManage && <th scope="col"><span className="visually-hidden">Actions</span></th>}</tr></thead>
                 <tbody>
                   {services.data.items.map((s) => editing === s.id ? (
-                    <tr key={s.id}><td colSpan={5}><ServiceForm service={s} onDone={() => setEditing(null)} /></td></tr>
+                    <tr key={s.id}><td colSpan={6}><ServiceForm service={s} onDone={() => setEditing(null)} /></td></tr>
                   ) : (
                     <tr key={s.id}>
                       <td>{s.name}{s.durationMinutes && <div className="muted">{s.durationMinutes} min</div>}</td>
                       <td>{SERVICE_CATEGORY_LABELS[s.category as ServiceCategory] ?? s.category}</td>
                       <td>{formatMoney(s.priceCents)} <span className="muted">{PRICE_UNIT_LABELS[s.priceUnit as PriceUnit]}</span></td>
+                      <td>
+                        {s.vaccineRequirements.dog.length + s.vaccineRequirements.cat.length === 0 ? <span className="muted">None</span> : <>
+                          {s.vaccineRequirements.dog.length > 0 && <div>Dogs: {s.vaccineRequirements.dog.join(", ")}</div>}
+                          {s.vaccineRequirements.cat.length > 0 && <div>Cats: {s.vaccineRequirements.cat.join(", ")}</div>}
+                        </>}
+                      </td>
                       <td>{s.isActive ? <span className="badge badge-success">Offered</span> : <span className="badge">Not offered</span>}</td>
                       {canManage && <td className="row-actions"><button className="btn btn-small" onClick={() => setEditing(s.id)} aria-label={`Edit ${s.name}`}>Edit</button></td>}
                     </tr>

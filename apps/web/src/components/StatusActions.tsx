@@ -12,7 +12,7 @@ const PRIMARY = new Set(["confirmed", "checked_in", "completed"]);
 export function useStatusChange(reservationId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { status: string; reason?: string }) => post<Reservation>(`/api/reservations/${reservationId}/status`, body),
+    mutationFn: (body: { status: string; reason?: string; overrideVaccinations?: boolean; overrideReason?: string }) => post<Reservation>(`/api/reservations/${reservationId}/status`, body),
     onSuccess: (r) => {
       qc.setQueryData(["reservation", reservationId], r);
       qc.invalidateQueries({ queryKey: ["reservations"] });
@@ -23,13 +23,13 @@ export function useStatusChange(reservationId: string) {
 }
 
 /** Buttons for every status change the reservation allows and the user may perform. */
-export function StatusActions({ reservation }: { reservation: Reservation }) {
+export function StatusActions({ reservation, exclude = [] }: { reservation: Reservation; exclude?: string[] }) {
   const canWrite = useCan("reservations:write");
   const canStay = useCan("stays:check_in_out");
   const change = useStatusChange(reservation.id);
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
-  const permitted = reservation.allowedTransitions.filter((t) =>
+  const permitted = reservation.allowedTransitions.filter((t) => !exclude.includes(t)).filter((t) =>
     t === "checked_in" || t === "completed" ? canStay : canWrite);
   if (permitted.length === 0) return null;
 
