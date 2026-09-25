@@ -72,6 +72,17 @@ Rules enforced in the API:
   in the audit entry as `capacityOverride`.
 - A resource must be at the reservation's location, and overlapping active stays can't hold more pets than its `capacity`.
 
+## 0004_vaccine_requirements
+
+| Table | Purpose | Notes |
+|---|---|---|
+| `service_vaccine_requirements` | Vaccines required per service and species | `(service_id, species, vaccine)`, with names unique case-insensitively; replaced as a set when a service is edited |
+
+Check-in rule (`packages/shared/src/vaccinations.ts`): each required vaccine must have a non-voided
+record whose latest `expires_on` is on or after the stay's last local day. Records expiring
+mid-stay count as failing. Names match case-insensitively. Managers can override with a reason
+(`stays:override_vaccinations`), recorded as `vaccinationOverride` in the check-in audit entry.
+
 Tables without RLS: `users` and `sessions`. They are identity data that login needs before a
 tenant is known, and the app only reaches them by id, email or token hash.
 `organizations` and `memberships` have RLS that also lets a user see their own memberships.

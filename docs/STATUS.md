@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-09-25 (session 3: capacity and kennels)_
+_Last updated: 2026-09-25 (session 4: check-in verification)_
 
 ## Built and tested
 
@@ -16,13 +16,15 @@ _Last updated: 2026-09-25 (session 3: capacity and kennels)_
 | **Reservations** (multi-pet, price snapshot, reschedule, status lifecycle, cancel with reason, double-booking prevention) | ✅ | ✅ | `reservations:write`, check-in/out needs `stays:check_in_out` | list, booking form with live estimate, detail with status actions, customer panel | unit + integration + e2e |
 | **Capacity limits** (daycare/day, boarding/night per location; manager override, audited) | ✅ | ✅ | `locations:manage` to set; `reservations:override_capacity` to exceed | Kennels & capacity page; override option in booking form | unit + integration + e2e |
 | **Kennels & rooms** (resources with pet capacity; per-pet assignment with availability) | ✅ | ✅ | `resources:manage` to set up; assign with `reservations:write` or `stays:check_in_out` | Kennels & capacity page; Kennels panel on reservation | integration + e2e |
+| **Check-in verification** (required vaccines per service and species, valid through the stay; manager override with reason, audited; kennel reminder) | ✅ | ✅ | `stays:check_in_out`; `stays:override_vaccinations` to override | Check-in panel on reservation (care alerts → vaccinations → kennels); dashboard flags arrivals needing vaccines; requirements on Services | unit + integration + e2e |
 | Dashboard (occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
 | Audit log (append-only, field diffs) | ✅ | read endpoint | `audit:read` | history panels (customer, pet, reservation) | integration |
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results: typecheck ✅, 23 shared unit tests ✅, 40 API integration tests ✅,
-4 web tests ✅, 7 Playwright e2e tests ✅.
+Latest check results: typecheck ✅, 28 shared unit tests ✅, 47 API integration tests ✅,
+4 web tests ✅, 11 Playwright e2e tests ✅. An exploratory browser QA pass against an upgraded
+copy of the previous version's database also passed (no console errors).
 
 ## Not built yet (in scope, by priority)
 
@@ -45,6 +47,9 @@ Latest check results: typecheck ✅, 23 shared unit tests ✅, 40 API integratio
 - The double-booking rule is enforced in the API with row locks, not by a database constraint.
   A future migration could add an exclusion constraint (`btree_gist`).
 - Capacity and kennel rules are enforced in the API under row locks, not by database constraints.
+- Vaccine names are free text, matched case-insensitively. "Bordetella" and "Kennel cough" won't
+  match each other. A managed vaccine list would fix that.
+- Upgraded installs have no vaccination requirements until a manager sets them on each service.
 - Capacity counts pets, not size. Large and small dogs count the same.
 - Grooming isn't capacity-limited per location; use grooming stations as resources for now.
 - Kennel availability counts any pet assigned during the requested window. That's conservative
@@ -60,7 +65,7 @@ Latest check results: typecheck ✅, 23 shared unit tests ✅, 40 API integratio
 
 ## Next recommended step
 
-**Guided check-in:** from an arrival, show a short check-in panel that verifies required
-vaccinations are current (block or warn per service), confirms or assigns a kennel for boarding,
-and surfaces care alerts. Then check-out with a care-log and charges review, which leads into
-care records and billing.
+**Care records for current stays:** a "Today's care" view of checked-in pets where staff log
+feeding, medication (dose, time, who gave it, never overwritten; corrections are new entries),
+activities and incidents, plus each pet's standing feeding and medication instructions. This feeds
+the dashboard's "medication due" list and the check-out review.
