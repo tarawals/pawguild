@@ -1,0 +1,16 @@
+{
+  "name": "pawguild",
+  "private": true,
+  "description": "PawGuild — the operating platform for pet-care businesses",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "dev:api": "npm run dev -w @pawguild/api",
+    "dev:web": "npm run dev -w @pawguild/web",
+    "db:migrate": "npm run db:migrate -w @pawguild/api",
+    "db:seed": "npm run db:seed -w @pawguild/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "engines": { "node": ">=20" }
+}
