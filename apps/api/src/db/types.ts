@@ -221,6 +221,13 @@ export interface ResourcesTable {
   updatedAt: Generated<Date>;
 }
 
+export interface ServiceVaccineRequirementsTable {
+  organizationId: string;
+  serviceId: string;
+  species: string;
+  vaccine: string;
+}
+
 export interface Database {
   organizations: OrganizationsTable;
   locations: LocationsTable;
@@ -237,6 +244,7 @@ export interface Database {
   reservationPets: ReservationPetsTable;
   locationCapacities: LocationCapacitiesTable;
   resources: ResourcesTable;
+  serviceVaccineRequirements: ServiceVaccineRequirementsTable;
 }
 
 export type Customer = Selectable<CustomersTable>;

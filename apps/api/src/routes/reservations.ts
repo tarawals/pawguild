@@ -11,6 +11,7 @@ import { diff, recordAudit } from "../lib/audit";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors";
 import { capacityShortfalls, type PeriodOccupancy } from "../lib/capacity";
 import { idParam } from "../lib/params";
+import { describeProblems, reservationVaccinationChecks } from "../lib/vaccinations";
 
 /** Statuses that hold a pet's time slot. */
 const ACTIVE_STATUSES = ["pending", "confirmed", "checked_in"] as const;
@@ -74,6 +75,7 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     .leftJoin("resources as res", "res.id", "rp.resourceId")
     .select(["p.id", "p.name", "p.species", "p.breed", "p.allergies", "p.medicalNotes", "rp.resourceId", "res.name as resourceName"])
     .where("rp.reservationId", "=", id).orderBy("p.name").execute();
+  const vaccinationCheck = (await reservationVaccinationChecks(trx, [id])).get(id) ?? [];
   const { firstName, lastName, phone, serviceName, serviceCategory, locationName, locationTimezone, ...rest } = r;
   const status = r.status as ReservationStatus;
   return {
@@ -82,6 +84,7 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     service: { id: r.serviceId, name: serviceName, category: serviceCategory },
     location: { id: r.locationId, name: locationName },
     pets,
+    vaccinationCheck,
     allowedTransitions: allowedTransitions(status),
     estimate: estimateReservation({
       unit: r.priceUnit as PriceUnit, unitPriceCents: r.unitPriceCents, startsAt: r.startsAt, endsAt: r.endsAt,
@@ -244,7 +247,7 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/:id/status", { preHandler: app.authorize("reservations:read") }, async (req) => {
     const id = idParam(req.params, "Reservation");
-    const { status: to, reason } = reservationStatusInput.parse(req.body);
+    const { status: to, reason, overrideVaccinations, overrideReason } = reservationStatusInput.parse(req.body);
     requireStatusPermission(req.auth, to);
     return withTenant(app.db, req.auth, async (trx) => {
       const current = await trx.selectFrom("reservations").select(["id", "status"]).where("id", "=", id).forUpdate().executeTakeFirst();
@@ -256,6 +259,24 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
           { allowed: allowedTransitions(from) });
       }
       if (to === "cancelled" && !reason) throw fieldError("reason", "Give a reason for cancelling");
+
+      // Check-in verification: every pet must have the service's required vaccinations, valid
+      // through the stay. Managers may override with a reason; the override is audited.
+      let vaccinationOverride: { reason: string; problems: string } | undefined;
+      if (to === "checked_in") {
+        const pets = (await reservationVaccinationChecks(trx, [id])).get(id) ?? [];
+        if (pets.some((p) => !p.ok)) {
+          const problems = describeProblems(pets);
+          if (!overrideVaccinations) {
+            throw new AppError(409, "vaccinations_required",
+              `Required vaccinations aren't current — ${problems}. Record up-to-date vaccinations on the pet's profile, or ask a manager to override.`,
+              { pets: pets.filter((p) => !p.ok) });
+          }
+          if (!req.auth.permissions.has("stays:override_vaccinations")) throw forbidden();
+          if (!overrideReason) throw fieldError("overrideReason", "Explain why this pet is being checked in without current vaccinations");
+          vaccinationOverride = { reason: overrideReason, problems };
+        }
+      }
       const now = new Date();
       await trx.updateTable("reservations").set({
         status: to,
@@ -265,7 +286,7 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
         ...(to === "cancelled" && { cancelledAt: now, cancellationReason: reason }),
       }).where("id", "=", id).execute();
       await recordAudit(trx, req.auth, { action: `reservation.${to}`, entityType: "reservation", entityId: id,
-        changes: { status: { from, to }, ...(reason && { reason }) } });
+        changes: { status: { from, to }, ...(reason && { reason }), ...(vaccinationOverride && { vaccinationOverride }) } });
       return loadReservation(trx, id, await orgTimezone(trx, req.auth.orgId));
     });
   });

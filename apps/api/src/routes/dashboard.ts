@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import { calendarDate } from "@pawguild/shared";
 import { withTenant } from "../db";
 import { occupancy } from "../lib/capacity";
+import { reservationVaccinationChecks } from "../lib/vaccinations";
 
 /**
  * Operational summary: what needs attention today. Everything is computed from live records,
@@ -64,10 +65,17 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         return { locationId: l.id, locationName: l.name, daycare: daycare!, boarding: boarding! };
       }));
 
+      // Flag arrivals that will fail check-in verification so staff can sort it out beforehand.
+      const checks = await reservationVaccinationChecks(trx, arrivals.map((a) => a.id));
+      const arrivalsWithChecks = arrivals.map((a) => ({
+        ...a,
+        petsNeedingVaccinations: (checks.get(a.id) ?? []).filter((p) => !p.ok).map((p) => p.petName),
+      }));
+
       return {
         ...counts,
         occupancy: occupancyByLocation,
-        arrivals,
+        arrivals: arrivalsWithChecks,
         departures,
         vaccinationAlerts: vaccinationAlerts.map(({ firstName, lastName, ...v }) => ({
           ...v,

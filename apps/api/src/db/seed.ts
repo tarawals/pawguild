@@ -32,14 +32,22 @@ export async function seed(connectionString: string, password: string) {
         kennel("Grooming Station 1", "grooming_station"),
         kennel("Grooming Station 2", "grooming_station"),
       ]).execute();
-      await trx.insertInto("services").values([
+      const services = await trx.insertInto("services").values([
         { organizationId: org.id, name: "Daycare — Full Day", category: "daycare", priceCents: 3800, priceUnit: "per_day" },
         { organizationId: org.id, name: "Daycare — Half Day", category: "daycare", priceCents: 2600, priceUnit: "per_day" },
         { organizationId: org.id, name: "Boarding — Standard Suite", category: "boarding", priceCents: 5500, priceUnit: "per_night" },
         { organizationId: org.id, name: "Full Groom", category: "grooming", priceCents: 8500, priceUnit: "per_visit", durationMinutes: 120 },
         { organizationId: org.id, name: "Bath & Brush", category: "grooming", priceCents: 4000, priceUnit: "per_visit", durationMinutes: 60 },
         { organizationId: org.id, name: "Nail Trim", category: "add_on", priceCents: 1500, priceUnit: "per_visit", durationMinutes: 15 },
-      ]).execute();
+      ]).returning(["id", "category"]).execute();
+      // Typical requirements: daycare/boarding need core vaccines plus Bordetella; grooming needs Rabies.
+      const requirement = (serviceId: string, species: string, vaccine: string) => ({ organizationId: org.id, serviceId, species, vaccine });
+      await trx.insertInto("serviceVaccineRequirements").values(services.flatMap((s) =>
+        s.category === "daycare" || s.category === "boarding"
+          ? [requirement(s.id, "dog", "Rabies"), requirement(s.id, "dog", "DHPP"), requirement(s.id, "dog", "Bordetella"),
+             requirement(s.id, "cat", "Rabies"), requirement(s.id, "cat", "FVRCP")]
+          : s.category === "grooming" ? [requirement(s.id, "dog", "Rabies"), requirement(s.id, "cat", "Rabies")] : [],
+      )).execute();
       const passwordHash = await hashPassword(password);
       const staff = [
         { email: "owner@harborhounds.example", firstName: "Jordan", lastName: "Reyes", role: "owner" },
@@ -70,9 +78,11 @@ export async function seed(connectionString: string, password: string) {
         for (const pet of pets) {
           const p = await trx.insertInto("pets").values({ ...pet, organizationId: org.id, customerId: customer.id }).returning("id").executeTakeFirstOrThrow();
           const soon = new Date(Date.now() + (pet.name === "Otis" ? 10 : 200) * 86400_000).toISOString().slice(0, 10);
+          // Otis is deliberately missing DHPP so the demo shows check-in verification.
           await trx.insertInto("petVaccinations").values([
             { organizationId: org.id, petId: p.id, vaccine: "Rabies", expiresOn: soon, recordedByUserId: owner.id },
             { organizationId: org.id, petId: p.id, vaccine: "Bordetella", expiresOn: soon, recordedByUserId: owner.id },
+            ...(pet.name === "Otis" ? [] : [{ organizationId: org.id, petId: p.id, vaccine: "DHPP", expiresOn: soon, recordedByUserId: owner.id }]),
           ]).execute();
         }
       }
