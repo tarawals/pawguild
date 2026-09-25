@@ -126,6 +126,16 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .badge-success { background: var(--success-soft); color: var(--success); }
 .badge-warning { background: var(--warning-soft); color: var(--warning); }
 .badge-danger { background: var(--danger-soft); color: var(--danger); }
+.badge-info { background: #e4eefa; color: #1f4f8a; }
+.badge-muted { background: var(--neutral-soft); color: var(--text-muted); text-decoration: line-through; }
+.pet-picker { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.estimate { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 14px; background: var(--primary-soft); border-radius: 6px; }
+.estimate strong { font-size: 1.2rem; }
+.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; }
+.filters .field { min-width: 170px; }
+.row-actions { text-align: right; white-space: nowrap; }
+.inline-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 12px; }
+.inline-form .field { flex: 1 1 240px; }
 .empty { text-align: center; padding: 32px 16px; color: var(--text-muted); }
 .empty h3 { color: var(--text); margin-bottom: 4px; }
 .care-flag { border-left: 4px solid var(--warning); background: var(--warning-soft); padding: 10px 12px; border-radius: 6px; }

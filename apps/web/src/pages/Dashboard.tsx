@@ -1,9 +1,52 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
-import { get, type DashboardSummary } from "../api";
-import { useMe } from "../auth";
-import { EmptyState, ErrorAlert, Loading, PageHeader, Panel } from "../components/ui";
-import { daysUntil, formatDate } from "../units";
+import { get, type DashboardSummary, type ReservationListItem } from "../api";
+import { useCan, useMe } from "../auth";
+import { useStatusChange } from "../components/StatusActions";
+import { EmptyState, ErrorAlert, Loading, PageHeader, Panel, ReservationStatusBadge } from "../components/ui";
+import { daysUntil, formatDate, formatTime } from "../units";
+
+function QuickAction({ r, to, label }: { r: ReservationListItem; to: string; label: string }) {
+  const change = useStatusChange(r.id);
+  return (
+    <>
+      <button className="btn btn-small btn-primary" disabled={change.isPending} onClick={() => change.mutate({ status: to })}
+        aria-label={`${label} ${r.petNames.join(", ")}`}>{label}</button>
+      {change.error && <div role="alert" className="error" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>{change.error.message}</div>}
+    </>
+  );
+}
+
+function StayTable({ rows, kind }: { rows: ReservationListItem[]; kind: "arrivals" | "departures" }) {
+  const canStay = useCan("stays:check_in_out");
+  const now = new Date();
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead><tr><th scope="col">{kind === "arrivals" ? "Drop-off" : "Pick-up"}</th><th scope="col">Pets</th><th scope="col">Customer</th><th scope="col">Service</th><th scope="col"><span className="visually-hidden">Actions</span></th></tr></thead>
+        <tbody>
+          {rows.map((r) => {
+            const time = kind === "arrivals" ? r.startsAt : r.endsAt;
+            const overdue = kind === "departures" && new Date(r.endsAt) < now && new Date(r.endsAt).toDateString() !== now.toDateString();
+            return (
+              <tr key={r.id}>
+                <td>{overdue ? <span className="badge badge-danger">Overdue · {new Date(r.endsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span> : formatTime(time)}</td>
+                <td><Link to={`/reservations/${r.id}`}>{r.petNames.join(", ")}</Link></td>
+                <td>{r.customerName}</td>
+                <td>{r.serviceName}</td>
+                <td className="row-actions">
+                  {kind === "arrivals" && r.status === "pending" && <ReservationStatusBadge status="pending" />}
+                  {canStay && kind === "arrivals" && r.status === "confirmed" && <QuickAction r={r} to="checked_in" label="Check in" />}
+                  {canStay && kind === "departures" && <QuickAction r={r} to="completed" label="Check out" />}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export function DashboardPage() {
   const me = useMe();
@@ -17,8 +60,18 @@ export function DashboardPage() {
       {summary.isPending ? <Loading /> : summary.data && (
         <>
           <div className="stats">
+            <div className="panel stat"><div className="label">Arriving today</div><div className="value">{summary.data.arrivals.length}</div></div>
+            <div className="panel stat"><div className="label">Pets checked in</div><div className="value">{summary.data.petsCheckedIn}</div></div>
+            <div className="panel stat"><div className="label">Departing today</div><div className="value">{summary.data.departures.length}</div></div>
             <div className="panel stat"><div className="label">Active customers</div><div className="value">{summary.data.activeCustomers}</div></div>
-            <div className="panel stat"><div className="label">Active pets</div><div className="value">{summary.data.activePets}</div></div>
+          </div>
+          <div className="stack" style={{ marginBottom: 16 }}>
+            <Panel title="Arrivals today" bodyless>
+              {summary.data.arrivals.length === 0 ? <EmptyState title="No more arrivals today" /> : <StayTable rows={summary.data.arrivals} kind="arrivals" />}
+            </Panel>
+            <Panel title="Departures today" bodyless>
+              {summary.data.departures.length === 0 ? <EmptyState title="No departures due" /> : <StayTable rows={summary.data.departures} kind="departures" />}
+            </Panel>
           </div>
           <Panel title="Vaccinations needing attention" bodyless>
             {summary.data.vaccinationAlerts.length === 0 ? (
@@ -51,7 +104,7 @@ export function DashboardPage() {
             )}
           </Panel>
           <p className="muted" style={{ marginTop: 16 }}>
-            Check-ins, occupancy, care tasks and balances will appear here as reservations, stays and billing are added.
+            Occupancy, care tasks and balances will appear here as capacity, care records and billing are added.
           </p>
         </>
       )}

@@ -1,8 +1,34 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
-import { get, post, type Customer } from "../api";
+import { get, post, type Customer, type ReservationListItem } from "../api";
 import { useCan } from "../auth";
-import { EmptyState, ErrorAlert, Loading, PageHeader, Panel, StatusBadge } from "../components/ui";
+import { EmptyState, ErrorAlert, Loading, PageHeader, Panel, ReservationStatusBadge, StatusBadge } from "../components/ui";
+import { formatRange } from "../units";
+
+function CustomerReservations({ customerId, canBook }: { customerId: string; canBook: boolean }) {
+  const list = useQuery({
+    queryKey: ["reservations", "customer", customerId],
+    queryFn: () => get<{ items: ReservationListItem[] }>(`/api/reservations?customerId=${customerId}&from=${encodeURIComponent(new Date(Date.now() - 30 * 86400_000).toISOString())}`),
+  });
+  return (
+    <Panel title="Reservations" actions={canBook && <Link className="btn btn-small btn-primary" to={`/reservations/new?customerId=${customerId}`}>New reservation</Link>} bodyless>
+      {list.isPending ? <div className="panel-body"><Loading /></div> : list.error ? <div className="panel-body"><ErrorAlert error={list.error} /></div> :
+        list.data.items.length === 0 ? <EmptyState title="No current or upcoming reservations" /> : (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th scope="col">When</th><th scope="col">Pets</th><th scope="col">Service</th><th scope="col">Status</th></tr></thead>
+              <tbody>{list.data.items.map((r) => (
+                <tr key={r.id}>
+                  <td><Link to={`/reservations/${r.id}`}>{formatRange(r.startsAt, r.endsAt)}</Link></td>
+                  <td>{r.petNames.join(", ")}</td><td>{r.serviceName}</td><td><ReservationStatusBadge status={r.status} /></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+    </Panel>
+  );
+}
 import { History } from "./History";
 
 export function CustomerDetailPage() {
@@ -10,6 +36,7 @@ export function CustomerDetailPage() {
   const qc = useQueryClient();
   const canWrite = useCan("customers:write");
   const canWritePets = useCan("pets:write");
+  const canBook = useCan("reservations:write");
   const customer = useQuery({ queryKey: ["customer", id], queryFn: () => get<Customer>(`/api/customers/${id}`) });
   const archive = useMutation({
     mutationFn: (action: "archive" | "restore") => post<Customer>(`/api/customers/${id}/${action}`),
@@ -66,6 +93,7 @@ export function CustomerDetailPage() {
               </div>
             ) : <EmptyState title="No pets yet">Add this customer's pets to start booking stays.</EmptyState>}
           </Panel>
+          <CustomerReservations customerId={c.id} canBook={canBook && !archived && c.status !== "banned"} />
           <History entityType="customer" entityId={c.id} />
         </div>
         <div className="stack">

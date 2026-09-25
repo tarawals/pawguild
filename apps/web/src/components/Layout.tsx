@@ -6,6 +6,7 @@ export function Layout() {
   const logout = useLogout();
   const canReadCustomers = useCan("customers:read");
   const canReadPets = useCan("pets:read");
+  const canReadReservations = useCan("reservations:read");
   return (
     <div className="shell">
       <a href="#main" className="skip-link">Skip to content</a>
@@ -16,9 +17,17 @@ export function Layout() {
         </NavLink>
         <nav className="nav" aria-label="Main">
           <NavLink to="/" end>Dashboard</NavLink>
+          <div className="nav-section">Operations</div>
+          {canReadReservations && <NavLink to="/reservations">Reservations</NavLink>}
           <div className="nav-section">Clients</div>
           {canReadCustomers && <NavLink to="/customers">Customers</NavLink>}
           {canReadPets && <NavLink to="/pets">Pets</NavLink>}
+          {canReadReservations && (
+            <>
+              <div className="nav-section">Business</div>
+              <NavLink to="/services">Services</NavLink>
+            </>
+          )}
         </nav>
         <div className="sidebar-footer">
           <strong>{me.user.firstName} {me.user.lastName}</strong>

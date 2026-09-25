@@ -92,8 +92,35 @@ export interface AuditEntry {
   changes: Record<string, { from: unknown; to: unknown }> | null; createdAt: string; actorName: string | null;
 }
 
+export interface Service {
+  id: string; name: string; category: string; description: string | null; priceCents: number;
+  priceUnit: string; durationMinutes: number | null; isActive: boolean;
+}
+
+export interface Location { id: string; name: string; timezone: string | null; isActive: boolean }
+
+export interface ReservationListItem {
+  id: string; status: string; startsAt: string; endsAt: string; customerId: string; customerName: string;
+  serviceName: string; serviceCategory?: string; locationName?: string; petNames: string[];
+}
+
+export interface Reservation {
+  id: string; status: string; startsAt: string; endsAt: string; notes: string | null;
+  unitPriceCents: number; priceUnit: string; confirmedAt: string | null; checkedInAt: string | null;
+  checkedOutAt: string | null; cancelledAt: string | null; cancellationReason: string | null; createdAt: string;
+  customer: { id: string; firstName: string; lastName: string; phone: string | null };
+  service: { id: string; name: string; category: string };
+  location: { id: string; name: string };
+  pets: { id: string; name: string; species: string; breed: string | null; allergies: string | null; medicalNotes: string | null }[];
+  allowedTransitions: string[];
+  estimate: { quantity: number; petCount: number; unitPriceCents: number; totalCents: number };
+}
+
 export interface DashboardSummary {
   activeCustomers: number;
   activePets: number;
+  petsCheckedIn: number;
+  arrivals: ReservationListItem[];
+  departures: ReservationListItem[];
   vaccinationAlerts: { petId: string; petName: string; vaccine: string; expiresOn: string; customerName: string }[];
 }

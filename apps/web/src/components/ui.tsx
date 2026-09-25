@@ -1,4 +1,5 @@
 import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { RESERVATION_STATUS_LABELS, type ReservationStatus } from "@pawguild/shared";
 import { ApiError } from "../api";
 
 export function PageHeader({ title, description, actions, breadcrumb }: {
@@ -21,11 +22,12 @@ export function PageHeader({ title, description, actions, breadcrumb }: {
 export function Panel({ title, actions, children, bodyless }: {
   title?: ReactNode; actions?: ReactNode; children: ReactNode; bodyless?: boolean;
 }) {
+  const headingId = useId();
   return (
-    <section className="panel">
+    <section className="panel" aria-labelledby={title ? headingId : undefined}>
       {title && (
         <div className="panel-header">
-          <h2>{title}</h2>
+          <h2 id={headingId}>{title}</h2>
           {actions}
         </div>
       )}
@@ -117,6 +119,15 @@ export function StatusBadge({ status, archived }: { status: string; archived?: b
   const key = archived ? "archived" : status;
   const label = key.charAt(0).toUpperCase() + key.slice(1);
   return <span className={`badge ${STATUS_TONE[key] ?? ""}`}>{label}</span>;
+}
+
+const RESERVATION_TONE: Record<string, string> = {
+  pending: "badge-warning", confirmed: "badge-info", checked_in: "badge-success", completed: "",
+  cancelled: "badge-muted", no_show: "badge-danger",
+};
+
+export function ReservationStatusBadge({ status }: { status: string }) {
+  return <span className={`badge ${RESERVATION_TONE[status] ?? ""}`}>{RESERVATION_STATUS_LABELS[status as ReservationStatus] ?? status}</span>;
 }
 
 /** Collects field-level errors from an ApiError for form rendering. */

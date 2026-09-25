@@ -13,6 +13,10 @@ import { NotFoundPage } from "./pages/NotFound";
 import { PetDetailPage } from "./pages/PetDetail";
 import { PetFormPage } from "./pages/PetForm";
 import { PetsPage } from "./pages/Pets";
+import { ReservationDetailPage } from "./pages/ReservationDetail";
+import { ReservationFormPage } from "./pages/ReservationForm";
+import { ReservationsPage } from "./pages/Reservations";
+import { ServicesPage } from "./pages/Services";
 import "./styles.css";
 
 const queryClient = new QueryClient({
@@ -35,6 +39,11 @@ createRoot(document.getElementById("root")!).render(
             <Route path="pets" element={<PetsPage />} />
             <Route path="pets/:id" element={<PetDetailPage />} />
             <Route path="pets/:id/edit" element={<PetFormPage />} />
+            <Route path="reservations" element={<ReservationsPage />} />
+            <Route path="reservations/new" element={<ReservationFormPage />} />
+            <Route path="reservations/:id" element={<ReservationDetailPage />} />
+            <Route path="reservations/:id/edit" element={<ReservationFormPage />} />
+            <Route path="services" element={<ServicesPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
