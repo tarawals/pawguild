@@ -1,0 +1,74 @@
+/**
+ * Development demo data. Runs as the schema owner. Refuses to run in production.
+ * All names are fictional.
+ */
+import { fileURLToPath } from "node:url";
+import { hashPassword } from "../auth/password";
+import { createDb } from "./index";
+
+export async function seed(connectionString: string, password: string) {
+  const db = createDb(connectionString);
+  try {
+    const existing = await db.selectFrom("organizations").select("id").where("slug", "=", "harbor-hounds").executeTakeFirst();
+    if (existing) {
+      console.log("demo organization already exists; skipping seed");
+      return;
+    }
+    await db.transaction().execute(async (trx) => {
+      const org = await trx.insertInto("organizations")
+        .values({ name: "Harbor Hounds Pet Resort", slug: "harbor-hounds", email: "frontdesk@harborhounds.example", phone: "555-0100", timezone: "America/New_York" })
+        .returning("id").executeTakeFirstOrThrow();
+      await trx.insertInto("locations")
+        .values({ organizationId: org.id, name: "Harbor Hounds — Downtown", city: "Portland", region: "ME", country: "US", daycareCapacity: 40 })
+        .execute();
+      const passwordHash = await hashPassword(password);
+      const staff = [
+        { email: "owner@harborhounds.example", firstName: "Jordan", lastName: "Reyes", role: "owner" },
+        { email: "desk@harborhounds.example", firstName: "Sam", lastName: "Patel", role: "front_desk" },
+        { email: "care@harborhounds.example", firstName: "Alex", lastName: "Kim", role: "care_attendant" },
+      ];
+      for (const s of staff) {
+        const user = await trx.insertInto("users")
+          .values({ email: s.email, firstName: s.firstName, lastName: s.lastName, passwordHash })
+          .returning("id").executeTakeFirstOrThrow();
+        await trx.insertInto("memberships").values({ organizationId: org.id, userId: user.id, role: s.role }).execute();
+      }
+      const customers = [
+        { firstName: "Morgan", lastName: "Ellis", email: "morgan.ellis@example.com", phone: "555-0142", pets: [
+          { name: "Biscuit", species: "dog", breed: "Golden Retriever", sex: "male", weightGrams: 31000, feedingInstructions: "1.5 cups kibble twice daily" },
+          { name: "Pepper", species: "dog", breed: "Border Collie", sex: "female", weightGrams: 18000, allergies: "Chicken" },
+        ] },
+        { firstName: "Riley", lastName: "Nguyen", email: "riley.nguyen@example.com", phone: "555-0178", pets: [
+          { name: "Juniper", species: "dog", breed: "French Bulldog", sex: "female", weightGrams: 11000, medicalNotes: "Brachycephalic — limit play in heat" },
+        ] },
+        { firstName: "Casey", lastName: "Brooks", email: "casey.brooks@example.com", phone: "555-0113", pets: [
+          { name: "Otis", species: "dog", breed: "Labrador Mix", sex: "male", weightGrams: 27000, temperament: "Friendly, high energy" },
+        ] },
+      ];
+      const owner = await trx.selectFrom("users").select("id").where("email", "=", "owner@harborhounds.example").executeTakeFirstOrThrow();
+      for (const { pets, ...c } of customers) {
+        const customer = await trx.insertInto("customers").values({ ...c, organizationId: org.id }).returning("id").executeTakeFirstOrThrow();
+        for (const pet of pets) {
+          const p = await trx.insertInto("pets").values({ ...pet, organizationId: org.id, customerId: customer.id }).returning("id").executeTakeFirstOrThrow();
+          const soon = new Date(Date.now() + (pet.name === "Otis" ? 10 : 200) * 86400_000).toISOString().slice(0, 10);
+          await trx.insertInto("petVaccinations").values([
+            { organizationId: org.id, petId: p.id, vaccine: "Rabies", expiresOn: soon, recordedByUserId: owner.id },
+            { organizationId: org.id, petId: p.id, vaccine: "Bordetella", expiresOn: soon, recordedByUserId: owner.id },
+          ]).execute();
+        }
+      }
+    });
+    console.log("seeded demo organization 'Harbor Hounds Pet Resort'");
+    console.log("sign in as owner@harborhounds.example / desk@… / care@… with SEED_PASSWORD");
+  } finally {
+    await db.destroy();
+  }
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  if (process.env.NODE_ENV === "production") throw new Error("Refusing to seed demo data in production");
+  const url = process.env.MIGRATION_DATABASE_URL;
+  const password = process.env.SEED_PASSWORD;
+  if (!url || !password) throw new Error("MIGRATION_DATABASE_URL and SEED_PASSWORD are required");
+  await seed(url, password);
+}
