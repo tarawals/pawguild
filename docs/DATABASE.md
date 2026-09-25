@@ -37,6 +37,22 @@ PostgreSQL 14+. Schema changes are plain SQL files in `apps/api/migrations/`, ap
 | `pet_vaccinations` | Vaccination records | immutable; mistakes are voided (`voided_at`, `voided_by_user_id`) |
 | `audit_log` | Append-only history | `changes` jsonb holds the field diff `{field: {from, to}}` |
 
+## 0002_services_reservations
+
+| Table | Purpose | Notes |
+|---|---|---|
+| `services` | Configurable offerings | `category` (daycare/boarding/grooming/training/add_on/other) drives booking behaviour; `price_cents` + `price_unit` (per_day/per_night/per_visit); deactivate with `is_active` |
+| `reservations` | A booking for one customer at one location for one service | `status` CHECK + lifecycle timestamps (`confirmed_at`, `checked_in_at`, `checked_out_at`, `cancelled_at` + `cancellation_reason`); **price snapshot** (`unit_price_cents`, `price_unit`) taken at booking |
+| `reservation_pets` | Pets on a reservation | carries `customer_id` so composite FKs guarantee every pet belongs to the reservation's customer |
+
+Rules enforced in the API (not yet in the database):
+- A pet can't be in two overlapping `pending`/`confirmed`/`checked_in` reservations. Pet rows are
+  locked `FOR UPDATE` during the check to serialize concurrent bookings. Intervals are half-open,
+  so back-to-back bookings are allowed.
+- Status changes must pass `assertTransition` (see `packages/shared/src/reservation-status.ts`).
+- Only `pending`/`confirmed` reservations can be edited. Customer, service and location are
+  fixed; to change them, cancel and rebook.
+
 Tables without RLS: `users` and `sessions`. They are identity data that login needs before a
 tenant is known, and the app only reaches them by id, email or token hash.
 `organizations` and `memberships` have RLS that also lets a user see their own memberships.
