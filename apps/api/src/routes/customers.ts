@@ -5,7 +5,7 @@ import { withTenant, type Tx } from "../db";
 import { diff, recordAudit } from "../lib/audit";
 import { notFound } from "../lib/errors";
 import { idParam, likePattern } from "../lib/params";
-import { customerBalance } from "./billing";
+import { customerBalance, customerCredit } from "./billing";
 
 const CUSTOMER_COLUMNS = [
   "id", "firstName", "lastName", "email", "phone", "altPhone", "addressLine1", "addressLine2",
@@ -75,8 +75,10 @@ export const customerRoutes: FastifyPluginAsync = async (app) => {
         .where("customerId", "=", id)
         .orderBy("name")
         .execute();
-      const balanceCents = req.auth.permissions.has("billing:read") ? await customerBalance(trx, id) : null;
-      return { ...customer, pets, balanceCents };
+      const billing = req.auth.permissions.has("billing:read")
+        ? { ...(await customerBalance(trx, id)), creditCents: await customerCredit(trx, id) }
+        : null;
+      return { ...customer, pets, billing };
     });
   });
 

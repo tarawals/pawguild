@@ -157,8 +157,8 @@ describe("payments and balances", () => {
 
     const part = await desk.post(`/api/invoices/${invoiceId}/payments`, { amountCents: 10000, method: "cash" });
     expect(part.json()).toMatchObject({ paymentStatus: "partially_paid", paidCents: 10000, balanceCents: 25923 });
-    expect((await desk.get(`/api/customers/${customer.id}`)).json().balanceCents).toBe(25923 + 4000);
-    expect((await desk.get("/api/dashboard/summary")).json().outstanding).toEqual({ cents: 29923, invoices: 2 });
+    expect((await desk.get(`/api/customers/${customer.id}`)).json().billing).toEqual({ owedCents: 25923 + 4000, overpaidCents: 0, creditCents: 0 });
+    expect((await desk.get("/api/dashboard/summary")).json().outstanding).toEqual({ cents: 29923, invoices: 2, overpaidInvoices: 0 });
 
     const full = await desk.post(`/api/invoices/${invoiceId}/payments`, { amountCents: 25923, method: "card", reference: "Visa 4242" });
     expect(full.json()).toMatchObject({ paymentStatus: "paid", balanceCents: 0 });
@@ -192,7 +192,7 @@ describe("payments and balances", () => {
 
   it("keeps billing away from roles without billing access", async () => {
     expect((await care.get("/api/invoices")).statusCode).toBe(403);
-    expect((await care.get(`/api/customers/${customer.id}`)).json().balanceCents).toBeNull();
+    expect((await care.get(`/api/customers/${customer.id}`)).json().billing).toBeNull();
   });
 });
 

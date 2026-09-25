@@ -78,6 +78,8 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
   const vaccinationCheck = (await reservationVaccinationChecks(trx, [id])).get(id) ?? [];
   const invoice = await trx.selectFrom("invoices").select(["id", "status", "number"])
     .where("reservationId", "=", id).where("status", "<>", "void").executeTakeFirst() ?? null;
+  const deposits = await trx.selectFrom("accountCredits").select((eb) => eb.fn.sum<number>("amountCents").as("n"))
+    .where("reservationId", "=", id).where("kind", "=", "received").executeTakeFirst();
   const { firstName, lastName, phone, serviceName, serviceCategory, locationName, locationTimezone, ...rest } = r;
   const status = r.status as ReservationStatus;
   return {
@@ -88,6 +90,7 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     pets,
     vaccinationCheck,
     invoice,
+    depositsCents: Number(deposits?.n ?? 0),
     allowedTransitions: allowedTransitions(status),
     estimate: estimateReservation({
       unit: r.priceUnit as PriceUnit, unitPriceCents: r.unitPriceCents, startsAt: r.startsAt, endsAt: r.endsAt,

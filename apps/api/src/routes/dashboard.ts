@@ -4,6 +4,7 @@ import { calendarDate } from "@pawguild/shared";
 import { withTenant } from "../db";
 import { occupancy } from "../lib/capacity";
 import { todaysDoses } from "../lib/care";
+import { billingSummary } from "./billing";
 import { reservationVaccinationChecks } from "../lib/vaccinations";
 
 /**
@@ -81,14 +82,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         .select(["i.id", "i.petId", "p.name as petName", "i.category", "i.severity", "i.occurredAt", "i.reservationId", "i.followUpRequired"])
         .where("i.resolvedAt", "is", null).orderBy("i.occurredAt", "desc").limit(20).execute();
 
-      const outstanding = req.auth.permissions.has("billing:read")
-        ? await sql<{ cents: number; invoices: number }>`
-            select coalesce(sum(i.total_cents - coalesce((select sum(p.amount_cents) from payments p
-                     where p.invoice_id = i.id and p.voided_at is null), 0)), 0)::bigint as cents,
-                   count(*) filter (where i.total_cents > coalesce((select sum(p.amount_cents) from payments p
-                     where p.invoice_id = i.id and p.voided_at is null), 0))::int as invoices
-              from invoices i where i.status = 'issued'`.execute(trx).then((r) => ({ cents: Number(r.rows[0]!.cents), invoices: r.rows[0]!.invoices }))
-        : null;
+      const outstanding = req.auth.permissions.has("billing:read") ? await billingSummary(trx) : null;
 
       return {
         ...counts,

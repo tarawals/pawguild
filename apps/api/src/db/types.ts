@@ -347,6 +347,48 @@ export interface PaymentsTable {
   voidReason: string | null;
 }
 
+export interface InvoiceCreditNotesTable {
+  id: Generated<string>;
+  organizationId: string;
+  invoiceId: string;
+  customerId: string;
+  amountCents: number;
+  reason: string;
+  createdByUserId: string;
+  createdAt: CreatedAt;
+}
+
+export interface RefundsTable {
+  id: Generated<string>;
+  organizationId: string;
+  customerId: string;
+  invoiceId: string | null;
+  amountCents: number;
+  method: string;
+  reference: string | null;
+  reason: string;
+  refundedAt: Timestamp;
+  recordedByUserId: string;
+  createdAt: CreatedAt;
+}
+
+export interface AccountCreditsTable {
+  id: Generated<string>;
+  organizationId: string;
+  customerId: string;
+  amountCents: number;
+  kind: string;
+  method: string | null;
+  reference: string | null;
+  note: string | null;
+  reservationId: string | null;
+  invoiceId: string | null;
+  paymentId: string | null;
+  refundId: string | null;
+  createdByUserId: string;
+  createdAt: CreatedAt;
+}
+
 export interface Database {
   organizations: OrganizationsTable;
   locations: LocationsTable;
@@ -371,6 +413,9 @@ export interface Database {
   invoices: InvoicesTable;
   invoiceLines: InvoiceLinesTable;
   payments: PaymentsTable;
+  invoiceCreditNotes: InvoiceCreditNotesTable;
+  refunds: RefundsTable;
+  accountCredits: AccountCreditsTable;
 }
 
 export type Customer = Selectable<CustomersTable>;
