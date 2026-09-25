@@ -18,9 +18,20 @@ export async function seed(connectionString: string, password: string) {
       const org = await trx.insertInto("organizations")
         .values({ name: "Harbor Hounds Pet Resort", slug: "harbor-hounds", email: "frontdesk@harborhounds.example", phone: "555-0100", timezone: "America/New_York" })
         .returning("id").executeTakeFirstOrThrow();
-      await trx.insertInto("locations")
-        .values({ organizationId: org.id, name: "Harbor Hounds — Downtown", city: "Portland", region: "ME", country: "US", daycareCapacity: 40 })
-        .execute();
+      const location = await trx.insertInto("locations")
+        .values({ organizationId: org.id, name: "Harbor Hounds — Downtown", city: "Portland", region: "ME", country: "US" })
+        .returning("id").executeTakeFirstOrThrow();
+      await trx.insertInto("locationCapacities").values([
+        { organizationId: org.id, locationId: location.id, category: "daycare", maxPets: 40 },
+        { organizationId: org.id, locationId: location.id, category: "boarding", maxPets: 12 },
+      ]).execute();
+      const kennel = (name: string, kind: string, capacity = 1) => ({ organizationId: org.id, locationId: location.id, name, kind, capacity });
+      await trx.insertInto("resources").values([
+        ...Array.from({ length: 10 }, (_, i) => kennel(`Kennel ${i + 1}`, "kennel")),
+        kennel("Family Suite A", "suite", 3),
+        kennel("Grooming Station 1", "grooming_station"),
+        kennel("Grooming Station 2", "grooming_station"),
+      ]).execute();
       await trx.insertInto("services").values([
         { organizationId: org.id, name: "Daycare — Full Day", category: "daycare", priceCents: 3800, priceUnit: "per_day" },
         { organizationId: org.id, name: "Daycare — Half Day", category: "daycare", priceCents: 2600, priceUnit: "per_day" },

@@ -34,7 +34,6 @@ export interface LocationsTable {
   phone: string | null;
   email: string | null;
   timezone: string | null;
-  daycareCapacity: number | null;
   isActive: Generated<boolean>;
   createdAt: CreatedAt;
   updatedAt: Generated<Date>;
@@ -198,6 +197,28 @@ export interface ReservationPetsTable {
   reservationId: string;
   customerId: string;
   petId: string;
+  resourceId: string | null;
+}
+
+export interface LocationCapacitiesTable {
+  organizationId: string;
+  locationId: string;
+  category: string;
+  maxPets: number;
+  updatedAt: Generated<Date>;
+}
+
+export interface ResourcesTable {
+  id: Generated<string>;
+  organizationId: string;
+  locationId: string;
+  name: string;
+  kind: string;
+  capacity: Generated<number>;
+  notes: string | null;
+  isActive: Generated<boolean>;
+  createdAt: CreatedAt;
+  updatedAt: Generated<Date>;
 }
 
 export interface Database {
@@ -214,6 +235,8 @@ export interface Database {
   services: ServicesTable;
   reservations: ReservationsTable;
   reservationPets: ReservationPetsTable;
+  locationCapacities: LocationCapacitiesTable;
+  resources: ResourcesTable;
 }
 
 export type Customer = Selectable<CustomersTable>;

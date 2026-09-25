@@ -14,6 +14,7 @@ import { dashboardRoutes } from "./routes/dashboard";
 import { locationRoutes } from "./routes/locations";
 import { petRoutes } from "./routes/pets";
 import { reservationRoutes } from "./routes/reservations";
+import { resourceRoutes } from "./routes/resources";
 import { serviceRoutes } from "./routes/services";
 
 declare module "fastify" {
@@ -126,6 +127,7 @@ export async function buildApp(opts: { db: Db; config: Config; logger?: boolean 
   await app.register(auditRoutes, { prefix: "/api/audit" });
   await app.register(serviceRoutes, { prefix: "/api/services" });
   await app.register(locationRoutes, { prefix: "/api/locations" });
+  await app.register(resourceRoutes, { prefix: "/api/resources" });
   await app.register(reservationRoutes, { prefix: "/api/reservations" });
   await app.register(dashboardRoutes, { prefix: "/api/dashboard" });
   return app;

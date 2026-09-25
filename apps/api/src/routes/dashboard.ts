@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
 import { sql } from "kysely";
+import { calendarDate } from "@pawguild/shared";
 import { withTenant } from "../db";
+import { occupancy } from "../lib/capacity";
 
 /**
  * Operational summary: what needs attention today. Everything is computed from live records,
@@ -51,8 +53,20 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         .limit(25)
         .execute();
 
+      // Daycare pets today and boarding pets tonight, per active location, against configured limits.
+      const locations = await trx.selectFrom("locations").select(["id", "name", "timezone"])
+        .where("isActive", "=", true).orderBy("name").execute();
+      const occupancyByLocation = await Promise.all(locations.map(async (l) => {
+        const tz = l.timezone ?? timezone;
+        const day = calendarDate(new Date(), tz);
+        const [daycare] = await occupancy(trx, { locationId: l.id, category: "daycare", periods: [day], timeZone: tz });
+        const [boarding] = await occupancy(trx, { locationId: l.id, category: "boarding", periods: [day], timeZone: tz });
+        return { locationId: l.id, locationName: l.name, daycare: daycare!, boarding: boarding! };
+      }));
+
       return {
         ...counts,
+        occupancy: occupancyByLocation,
         arrivals,
         departures,
         vaccinationAlerts: vaccinationAlerts.map(({ firstName, lastName, ...v }) => ({

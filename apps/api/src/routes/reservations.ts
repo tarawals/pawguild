@@ -1,5 +1,5 @@
 import {
-  allowedTransitions, canTransition, estimateReservation, RESERVATION_STATUS_LABELS,
+  assignmentsInput, isCapacityCategory, allowedTransitions, canTransition, estimateReservation, RESERVATION_STATUS_LABELS,
   reservationInput, reservationListQuery, reservationStatusInput, reservationUpdateInput,
   type PriceUnit, type ReservationStatus,
 } from "@pawguild/shared";
@@ -9,6 +9,7 @@ import { withTenant, type Tx } from "../db";
 import type { AuthContext } from "../lib/auth-context";
 import { diff, recordAudit } from "../lib/audit";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors";
+import { capacityShortfalls, type PeriodOccupancy } from "../lib/capacity";
 import { idParam } from "../lib/params";
 
 /** Statuses that hold a pet's time slot. */
@@ -70,7 +71,8 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     .where("r.id", "=", id).executeTakeFirst();
   if (!r) throw notFound("Reservation");
   const pets = await trx.selectFrom("reservationPets as rp").innerJoin("pets as p", "p.id", "rp.petId")
-    .select(["p.id", "p.name", "p.species", "p.breed", "p.allergies", "p.medicalNotes"])
+    .leftJoin("resources as res", "res.id", "rp.resourceId")
+    .select(["p.id", "p.name", "p.species", "p.breed", "p.allergies", "p.medicalNotes", "rp.resourceId", "res.name as resourceName"])
     .where("rp.reservationId", "=", id).orderBy("p.name").execute();
   const { firstName, lastName, phone, serviceName, serviceCategory, locationName, locationTimezone, ...rest } = r;
   const status = r.status as ReservationStatus;
@@ -91,6 +93,33 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
 function requireStatusPermission(auth: AuthContext, to: ReservationStatus) {
   const needed = to === "checked_in" || to === "completed" ? "stays:check_in_out" : "reservations:write";
   if (!auth.permissions.has(needed)) throw forbidden();
+}
+
+function formatPeriod(date: string): string {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/**
+ * Enforce location capacity for daycare/boarding services. Returns the periods that were
+ * overridden (for the audit log), or throws 409 when full and no permitted override was given.
+ */
+async function enforceCapacity(trx: Tx, auth: AuthContext, args: {
+  locationId: string; serviceCategory: string; startsAt: Date; endsAt: Date; petCount: number;
+  override?: boolean; excludeReservationId?: string;
+}): Promise<PeriodOccupancy[] | undefined> {
+  if (!isCapacityCategory(args.serviceCategory)) return undefined;
+  const short = await capacityShortfalls(trx, { ...args, category: args.serviceCategory });
+  if (short.length === 0) return undefined;
+  if (args.override) {
+    if (!auth.permissions.has("reservations:override_capacity")) throw forbidden();
+    return short;
+  }
+  const unit = args.serviceCategory === "boarding" ? "night" : "day";
+  const list = short.slice(0, 5).map((p) => `${formatPeriod(p.period)} (${p.booked}/${p.limit} booked)`).join(", ");
+  throw new AppError(409, "capacity_full",
+    `${args.serviceCategory === "boarding" ? "Boarding" : "Daycare"} is full for ${short.length === 1 ? `this ${unit}` : `${short.length} ${unit}s`}: ${list}${short.length > 5 ? ", …" : ""}. Choose different dates, or ask a manager to book over capacity.`,
+    { periods: short });
 }
 
 export const reservationRoutes: FastifyPluginAsync = async (app) => {
@@ -137,13 +166,17 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
       const [customer, location, service] = await Promise.all([
         trx.selectFrom("customers").select(["id", "status", "archivedAt"]).where("id", "=", input.customerId).executeTakeFirst(),
         trx.selectFrom("locations").select(["id", "isActive"]).where("id", "=", input.locationId).executeTakeFirst(),
-        trx.selectFrom("services").select(["id", "isActive", "priceCents", "priceUnit"]).where("id", "=", input.serviceId).executeTakeFirst(),
+        trx.selectFrom("services").select(["id", "isActive", "priceCents", "priceUnit", "category"]).where("id", "=", input.serviceId).executeTakeFirst(),
       ]);
       if (!customer || customer.archivedAt) throw invalid("That customer was not found or is archived.");
       if (customer.status === "banned") throw invalid("This customer's account is marked as banned. A manager must change the account status before booking.");
       if (!location || !location.isActive) throw invalid("That location was not found or is inactive.");
       if (!service || !service.isActive) throw invalid("That service was not found or is no longer offered.");
       await checkPets(trx, customer.id, input.petIds, startsAt, endsAt);
+      const overridden = await enforceCapacity(trx, req.auth, {
+        locationId: location.id, serviceCategory: service.category, startsAt, endsAt,
+        petCount: input.petIds.length, override: input.overrideCapacity,
+      });
 
       const now = new Date();
       const row = await trx.insertInto("reservations").values({
@@ -156,7 +189,10 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
         organizationId: req.auth.orgId, reservationId: row.id, customerId: customer.id, petId,
       }))).execute();
       await recordAudit(trx, req.auth, { action: "reservation.created", entityType: "reservation", entityId: row.id,
-        changes: { status: input.status, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), petIds: input.petIds } });
+        changes: {
+          status: input.status, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), petIds: input.petIds,
+          ...(overridden && { capacityOverride: overridden }),
+        } });
       return loadReservation(trx, row.id, await orgTimezone(trx, req.auth.orgId));
     });
     return reply.status(201).send(created);
@@ -177,6 +213,11 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
       const currentPets = (await trx.selectFrom("reservationPets").select("petId").where("reservationId", "=", id).execute()).map((p) => p.petId);
       const petIds = input.petIds ?? currentPets;
       await checkPets(trx, before.customerId, petIds, startsAt, endsAt, id);
+      const service = await trx.selectFrom("services").select("category").where("id", "=", before.serviceId).executeTakeFirstOrThrow();
+      const overridden = await enforceCapacity(trx, req.auth, {
+        locationId: before.locationId, serviceCategory: service.category, startsAt, endsAt,
+        petCount: petIds.length, override: input.overrideCapacity, excludeReservationId: id,
+      });
 
       const after = await trx.updateTable("reservations")
         .set({ startsAt, endsAt, ...(input.notes !== undefined && { notes: input.notes }) })
@@ -193,6 +234,7 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
         }
         if (removed.length || added.length) changes.pets = { removed, added };
       }
+      if (overridden && Object.keys(changes).length > 0) changes.capacityOverride = overridden;
       if (Object.keys(changes).length > 0) {
         await recordAudit(trx, req.auth, { action: "reservation.updated", entityType: "reservation", entityId: id, changes });
       }
@@ -225,6 +267,62 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
       await recordAudit(trx, req.auth, { action: `reservation.${to}`, entityType: "reservation", entityId: id,
         changes: { status: { from, to }, ...(reason && { reason }) } });
       return loadReservation(trx, id, await orgTimezone(trx, req.auth.orgId));
+    });
+  });
+
+  /** Assign (or clear) the kennel/room for each pet on a reservation. */
+  app.put("/:id/assignments", { preHandler: app.authorize("reservations:read") }, async (req) => {
+    const id = idParam(req.params, "Reservation");
+    if (!req.auth.permissions.has("reservations:write") && !req.auth.permissions.has("stays:check_in_out")) throw forbidden();
+    const { assignments } = assignmentsInput.parse(req.body);
+    return withTenant(app.db, req.auth, async (trx) => {
+      const r = await trx.selectFrom("reservations").select(["id", "status", "locationId", "startsAt", "endsAt"])
+        .where("id", "=", id).forUpdate().executeTakeFirst();
+      if (!r) throw notFound("Reservation");
+      if (!ACTIVE_STATUSES.includes(r.status as (typeof ACTIVE_STATUSES)[number])) {
+        throw new AppError(409, "not_editable", `Kennels can't be changed on a ${RESERVATION_STATUS_LABELS[r.status as ReservationStatus]} reservation.`);
+      }
+      const current = await trx.selectFrom("reservationPets").select(["petId", "resourceId"]).where("reservationId", "=", id).execute();
+      const onReservation = new Set(current.map((p) => p.petId));
+      if (assignments.some((a) => !onReservation.has(a.petId))) throw invalid("One or more pets aren't on this reservation.");
+      const next = new Map(current.map((p) => [p.petId, p.resourceId]));
+      for (const a of assignments) next.set(a.petId, a.resourceId);
+
+      const resourceIds = [...new Set([...next.values()].filter((v): v is string => v !== null))];
+      if (resourceIds.length > 0) {
+        // Lock the resources so two staff members can't fill the last space at once.
+        const resources = await trx.selectFrom("resources").select(["id", "name", "capacity", "isActive", "locationId"])
+          .where("id", "in", resourceIds).orderBy("id").forUpdate().execute();
+        if (resources.length !== resourceIds.length) throw invalid("That kennel or room was not found.");
+        for (const res of resources) {
+          if (res.locationId !== r.locationId) throw invalid(`${res.name} is at a different location.`);
+          const assignedHere = [...next.values()].filter((v) => v === res.id).length;
+          const changed = current.filter((p) => p.resourceId === res.id).length !== assignedHere;
+          if (!res.isActive && changed) throw invalid(`${res.name} is not in use.`);
+          const other = await trx.selectFrom("reservationPets as rp").innerJoin("reservations as x", "x.id", "rp.reservationId")
+            .select((eb) => eb.fn.countAll<number>().as("n"))
+            .where("rp.resourceId", "=", res.id).where("x.id", "<>", id)
+            .where("x.status", "in", ACTIVE_STATUSES).where("x.startsAt", "<", r.endsAt).where("x.endsAt", ">", r.startsAt)
+            .executeTakeFirstOrThrow();
+          if (Number(other.n) + assignedHere > res.capacity) {
+            throw new AppError(409, "resource_full",
+              `${res.name} holds ${res.capacity} pet${res.capacity === 1 ? "" : "s"} and is already occupied during this stay. Choose another.`);
+          }
+        }
+      }
+      const changes: Record<string, { from: string | null; to: string | null }> = {};
+      for (const a of assignments) {
+        const before = current.find((p) => p.petId === a.petId)!.resourceId;
+        if (before === a.resourceId) continue;
+        await trx.updateTable("reservationPets").set({ resourceId: a.resourceId })
+          .where("reservationId", "=", id).where("petId", "=", a.petId).execute();
+        changes[a.petId] = { from: before, to: a.resourceId };
+      }
+      if (Object.keys(changes).length > 0) {
+        await recordAudit(trx, req.auth, { action: "reservation.resources_assigned", entityType: "reservation", entityId: id, changes });
+      }
+      const { timezone } = await trx.selectFrom("organizations").select("timezone").where("id", "=", req.auth.orgId).executeTakeFirstOrThrow();
+      return loadReservation(trx, id, timezone);
     });
   });
 };
