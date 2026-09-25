@@ -3,6 +3,7 @@ import { formatMoney, PRICE_UNIT_LABELS, type PriceUnit } from "@pawguild/shared
 import { Link, useParams } from "react-router";
 import { get, type Reservation } from "../api";
 import { useCan } from "../auth";
+import { BillingPanel } from "../components/BillingPanel";
 import { CareLogPanel } from "../components/CareLogPanel";
 import { CheckInPanel } from "../components/CheckInPanel";
 import { KennelAssignment } from "../components/KennelAssignment";
@@ -63,6 +64,7 @@ export function ReservationDetailPage() {
               {r.cancelledAt && <><dt>Cancelled</dt><dd>{formatDateTime(r.cancelledAt)}{r.cancellationReason && ` — ${r.cancellationReason}`}</dd></>}
             </dl>
           </Panel>
+          <BillingPanel reservation={r} />
           <Panel title="Estimated charges">
             <dl className="details">
               <dt>Rate</dt><dd>{formatMoney(r.unitPriceCents)} {PRICE_UNIT_LABELS[r.priceUnit as PriceUnit]}</dd>

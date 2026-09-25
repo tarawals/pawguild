@@ -6,6 +6,8 @@ import { RequireAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { CapacityPage } from "./pages/Capacity";
 import { IncidentsPage } from "./pages/Incidents";
+import { InvoiceDetailPage } from "./pages/InvoiceDetail";
+import { InvoicesPage } from "./pages/Invoices";
 import { TodayCarePage } from "./pages/TodayCare";
 import { CustomerDetailPage } from "./pages/CustomerDetail";
 import { CustomerFormPage } from "./pages/CustomerForm";
@@ -20,10 +22,19 @@ import { ReservationDetailPage } from "./pages/ReservationDetail";
 import { ReservationFormPage } from "./pages/ReservationForm";
 import { ReservationsPage } from "./pages/Reservations";
 import { ServicesPage } from "./pages/Services";
+import { ApiError } from "./api";
 import "./styles.css";
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { refetchOnWindowFocus: true, staleTime: 15_000 } },
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: true,
+      staleTime: 15_000,
+      // Don't retry requests the server refused (permissions, not found, validation): show the
+      // message straight away. Retry network hiccups and server errors once.
+      retry: (count, err) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 1,
+    },
+  },
 });
 
 createRoot(document.getElementById("root")!).render(
@@ -50,6 +61,8 @@ createRoot(document.getElementById("root")!).render(
             <Route path="capacity" element={<CapacityPage />} />
             <Route path="care" element={<TodayCarePage />} />
             <Route path="incidents" element={<IncidentsPage />} />
+            <Route path="invoices" element={<InvoicesPage />} />
+            <Route path="invoices/:id" element={<InvoiceDetailPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

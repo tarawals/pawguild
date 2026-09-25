@@ -85,7 +85,9 @@ a { color: var(--primary); }
 .details dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* ---- Tables ---- */
-.table-wrap { overflow-x: auto; }
+/* position: relative keeps visually-hidden (absolute) children inside the scroll area, so wide tables
+   scroll within their panel instead of widening the page on phones. */
+.table-wrap { overflow-x: auto; position: relative; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
 th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 600; background: var(--surface-muted); }
@@ -164,3 +166,15 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .severity-high { background: var(--danger-soft); color: var(--danger); }
 .severity-medium { background: var(--warning-soft); color: var(--warning); }
 .severity-low { background: var(--neutral-soft); color: var(--text-muted); }
+
+tfoot th, tfoot td { border-bottom: 0; background: transparent; text-transform: none; letter-spacing: 0; font-size: 0.95rem; color: var(--text); padding-top: 6px; padding-bottom: 6px; }
+
+.print-only { display: none; }
+@media print {
+  .print-only { display: block; }
+  .sidebar, .topbar, .no-print, .breadcrumb, .skip-link { display: none !important; }
+  .shell { display: block; }
+  body { background: #fff; }
+  .panel { box-shadow: none; border-color: #bbb; }
+  .content { padding: 0; max-width: none; }
+}

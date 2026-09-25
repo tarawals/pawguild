@@ -14,7 +14,7 @@ const DEFAULT_UNIT: Record<ServiceCategory, PriceUnit> = {
 
 const emptyForm = {
   name: "", category: "daycare", price: "", priceUnit: "per_day", durationMinutes: "", description: "", isActive: true,
-  dogVaccines: "", catVaccines: "",
+  dogVaccines: "", catVaccines: "", isTaxable: false,
 };
 const splitList = (v: string) => v.split(",").map((x) => x.trim()).filter(Boolean);
 type FormState = typeof emptyForm;
@@ -23,7 +23,7 @@ function toForm(s: Service): FormState {
   return {
     name: s.name, category: s.category, price: (s.priceCents / 100).toFixed(2), priceUnit: s.priceUnit,
     durationMinutes: s.durationMinutes ? String(s.durationMinutes) : "", description: s.description ?? "", isActive: s.isActive,
-    dogVaccines: s.vaccineRequirements.dog.join(", "), catVaccines: s.vaccineRequirements.cat.join(", "),
+    dogVaccines: s.vaccineRequirements.dog.join(", "), catVaccines: s.vaccineRequirements.cat.join(", "), isTaxable: s.isTaxable,
   };
 }
 
@@ -40,6 +40,7 @@ function ServiceForm({ service, onDone }: { service?: Service; onDone: () => voi
         name: form.name, category: form.category, priceCents, priceUnit: form.priceUnit, description: form.description,
         durationMinutes: form.durationMinutes ? Number(form.durationMinutes) : null, isActive: form.isActive,
         vaccineRequirements: { dog: splitList(form.dogVaccines), cat: splitList(form.catVaccines) },
+        isTaxable: form.isTaxable,
       };
       return service ? patch(`/api/services/${service.id}`, body) : post("/api/services", body);
     },
@@ -66,6 +67,7 @@ function ServiceForm({ service, onDone }: { service?: Service; onDone: () => voi
           {PRICE_UNITS.map((u) => <option key={u} value={u}>{PRICE_UNIT_LABELS[u]}</option>)}
         </SelectField>
         <TextField label="Duration (minutes)" inputMode="numeric" hint="For timed appointments such as grooming" {...bind("durationMinutes")} error={err("durationMinutes")} />
+        <Checkbox label="Charge sales tax on this service" checked={form.isTaxable} onChange={(e) => setForm((f) => ({ ...f, isTaxable: e.target.checked }))} />
         <TextArea label="Description" className="span-all" {...bind("description")} error={err("description")} />
         <TextField label="Vaccines required for dogs" hint="Separate with commas, e.g. Rabies, DHPP, Bordetella" {...bind("dogVaccines")} error={err("vaccineRequirements.dog")} />
         <TextField label="Vaccines required for cats" hint="e.g. Rabies, FVRCP" {...bind("catVaccines")} error={err("vaccineRequirements.cat")} />
@@ -76,6 +78,25 @@ function ServiceForm({ service, onDone }: { service?: Service; onDone: () => voi
         <button className="btn" type="button" onClick={onDone}>Cancel</button>
       </div>
     </form>
+  );
+}
+
+/** One-click tax on/off for a service (managers); everyone else sees the setting. */
+function TaxSwitch({ service, canManage }: { service: Service; canManage: boolean }) {
+  const qc = useQueryClient();
+  const toggle = useMutation({
+    mutationFn: () => patch(`/api/services/${service.id}`, { isTaxable: !service.isTaxable }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["services"] }),
+  });
+  if (!canManage) return <span>{service.isTaxable ? "Taxed" : "Not taxed"}</span>;
+  return (
+    <>
+      <button type="button" role="switch" aria-checked={service.isTaxable} aria-label={`Sales tax on ${service.name}`}
+        className={`btn btn-small ${service.isTaxable ? "btn-primary" : ""}`} disabled={toggle.isPending} onClick={() => toggle.mutate()}>
+        {service.isTaxable ? "Taxed" : "Not taxed"}
+      </button>
+      {toggle.error && <div role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>{toggle.error.message}</div>}
+    </>
   );
 }
 
@@ -100,15 +121,16 @@ export function ServicesPage() {
           ) : services.data && (
             <div className="table-wrap">
               <table>
-                <thead><tr><th scope="col">Service</th><th scope="col">Category</th><th scope="col">Price</th><th scope="col">Vaccines required</th><th scope="col">Status</th>{canManage && <th scope="col"><span className="visually-hidden">Actions</span></th>}</tr></thead>
+                <thead><tr><th scope="col">Service</th><th scope="col">Category</th><th scope="col">Price</th><th scope="col">Sales tax</th><th scope="col">Vaccines required</th><th scope="col">Status</th>{canManage && <th scope="col"><span className="visually-hidden">Actions</span></th>}</tr></thead>
                 <tbody>
                   {services.data.items.map((s) => editing === s.id ? (
-                    <tr key={s.id}><td colSpan={6}><ServiceForm service={s} onDone={() => setEditing(null)} /></td></tr>
+                    <tr key={s.id}><td colSpan={7}><ServiceForm service={s} onDone={() => setEditing(null)} /></td></tr>
                   ) : (
                     <tr key={s.id}>
                       <td>{s.name}{s.durationMinutes && <div className="muted">{s.durationMinutes} min</div>}</td>
                       <td>{SERVICE_CATEGORY_LABELS[s.category as ServiceCategory] ?? s.category}</td>
                       <td>{formatMoney(s.priceCents)} <span className="muted">{PRICE_UNIT_LABELS[s.priceUnit as PriceUnit]}</span></td>
+                      <td><TaxSwitch service={s} canManage={canManage} /></td>
                       <td>
                         {s.vaccineRequirements.dog.length + s.vaccineRequirements.cat.length === 0 ? <span className="muted">None</span> : <>
                           {s.vaccineRequirements.dog.length > 0 && <div>Dogs: {s.vaccineRequirements.dog.join(", ")}</div>}

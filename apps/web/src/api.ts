@@ -17,7 +17,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(method: "GET" | "POST" | "PATCH" | "PUT", url: string, body?: unknown): Promise<T> {
+export async function api<T>(method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE", url: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
     res = await fetch(url, {
@@ -27,7 +27,7 @@ export async function api<T>(method: "GET" | "POST" | "PATCH" | "PUT", url: stri
         ...(body !== undefined ? { "content-type": "application/json" } : {}),
         ...(method !== "GET" ? { "x-pawguild-request": "1" } : {}),
       },
-      body: body !== undefined ? JSON.stringify(body) : method !== "GET" ? "{}" : undefined,
+      body: body !== undefined ? JSON.stringify(body) : method === "POST" || method === "PATCH" || method === "PUT" ? "{}" : undefined,
     });
   } catch {
     throw new ApiError(0, "network", "Can't reach PawGuild. Check your internet connection and try again.");
@@ -49,6 +49,7 @@ export const get = <T,>(url: string) => api<T>("GET", url);
 export const post = <T,>(url: string, body?: unknown) => api<T>("POST", url, body ?? {});
 export const patch = <T,>(url: string, body: unknown) => api<T>("PATCH", url, body);
 export const put = <T,>(url: string, body: unknown) => api<T>("PUT", url, body);
+export const del = <T,>(url: string) => api<T>("DELETE", url);
 
 // ---- Response types (mirror the API) --------------------------------------------------------
 
@@ -73,6 +74,8 @@ export interface Customer {
   status: string; emailOptIn: boolean; smsOptIn: boolean; archivedAt: string | null;
   createdAt: string; updatedAt: string;
   pets?: { id: string; name: string; species: string; breed: string | null; status: string; archivedAt: string | null }[];
+  /** Outstanding balance in cents; null when the user can't see billing. */
+  balanceCents?: number | null;
 }
 
 export interface Pet {
@@ -95,12 +98,12 @@ export interface AuditEntry {
 
 export interface Service {
   id: string; name: string; category: string; description: string | null; priceCents: number;
-  priceUnit: string; durationMinutes: number | null; isActive: boolean;
+  priceUnit: string; durationMinutes: number | null; isActive: boolean; isTaxable: boolean;
   vaccineRequirements: { dog: string[]; cat: string[]; other: string[] };
 }
 
 export interface Location {
-  id: string; name: string; timezone: string | null; isActive: boolean;
+  id: string; name: string; timezone: string | null; isActive: boolean; taxRateBps: number;
   capacity: { daycare: number | null; boarding: number | null };
 }
 
@@ -130,6 +133,7 @@ export interface Reservation {
     id: string; name: string; species: string; breed: string | null; allergies: string | null; medicalNotes: string | null;
     resourceId: string | null; resourceName: string | null;
   }[];
+  invoice: { id: string; status: string; number: number | null } | null;
   vaccinationCheck: {
     petId: string; petName: string; ok: boolean;
     checks: { vaccine: string; state: "current" | "missing" | "expired" | "expires_during_stay"; expiresOn: string | null }[];
@@ -142,6 +146,7 @@ export interface DashboardSummary {
   activeCustomers: number;
   activePets: number;
   petsCheckedIn: number;
+  outstanding: { cents: number; invoices: number } | null;
   medicationDue: Dose[];
   openIncidents: { id: string; petId: string; petName: string; category: string; severity: string; occurredAt: string; reservationId: string | null; followUpRequired: boolean }[];
   occupancy: { locationId: string; locationName: string; daycare: Occupancy; boarding: Occupancy }[];
@@ -186,3 +191,34 @@ export interface Incident {
   followUpRequired: boolean; followUpNotes: string | null; createdAt: string; updatedAt: string;
   resolvedAt: string | null; resolution: string | null; reportedBy: string; resolvedBy: string | null;
 }
+
+// ---- Billing -------------------------------------------------------------------------------
+
+export interface InvoiceListItem {
+  id: string; number: number | null; status: "draft" | "issued" | "void"; createdAt: string; issuedAt: string | null;
+  customerId: string; customerName: string; reservationId: string | null; totalCents: number; paidCents: number; balanceCents: number;
+}
+
+export interface InvoiceLine {
+  id: string; serviceId: string | null; description: string; quantity: number; unitPriceCents: number;
+  discountCents: number; taxable: boolean; amountCents: number;
+}
+
+export interface Payment {
+  id: string; amountCents: number; method: string; reference: string | null; receivedAt: string;
+  voidedAt: string | null; voidReason: string | null; recordedBy: string;
+}
+
+export interface Invoice {
+  id: string; status: "draft" | "issued" | "void"; number: number | null; taxRateBps: number; notes: string | null;
+  reservationId: string | null; createdAt: string; issuedAt: string | null; voidedAt: string | null; voidReason: string | null;
+  customer: { id: string; firstName: string; lastName: string; email: string | null; phone: string | null };
+  location: { id: string; name: string };
+  lines: InvoiceLine[]; payments: Payment[];
+  totals: { subtotalCents: number; discountCents: number; taxableCents: number; taxCents: number; totalCents: number };
+  paidCents: number; balanceCents: number;
+  paymentStatus: "draft" | "void" | "unpaid" | "partially_paid" | "paid";
+}
+
+export const invoiceLabel = (i: { number: number | null; status: string }) =>
+  i.number ? `Invoice #${String(i.number).padStart(4, "0")}` : i.status === "void" ? "Void draft" : "Draft invoice";

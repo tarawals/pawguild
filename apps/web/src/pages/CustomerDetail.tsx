@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router";
-import { get, post, type Customer, type ReservationListItem } from "../api";
+import { Link, useNavigate, useParams } from "react-router";
+import { formatMoney } from "@pawguild/shared";
+import { get, invoiceLabel, post, type Customer, type Invoice, type InvoiceListItem, type Location, type ReservationListItem } from "../api";
+import { InvoiceStatusBadge } from "../components/InvoiceStatusBadge";
 import { useCan } from "../auth";
 import { EmptyState, ErrorAlert, Loading, PageHeader, Panel, ReservationStatusBadge, StatusBadge } from "../components/ui";
 import { formatRange } from "../units";
+import { History } from "./History";
 
 function CustomerReservations({ customerId, canBook }: { customerId: string; canBook: boolean }) {
   const list = useQuery({
@@ -29,7 +32,41 @@ function CustomerReservations({ customerId, canBook }: { customerId: string; can
     </Panel>
   );
 }
-import { History } from "./History";
+
+function CustomerInvoices({ customer }: { customer: Customer }) {
+  const canWrite = useCan("billing:write");
+  const navigate = useNavigate();
+  const list = useQuery({
+    queryKey: ["invoices", "customer", customer.id],
+    queryFn: () => get<{ items: InvoiceListItem[] }>(`/api/invoices?customerId=${customer.id}&limit=20`),
+  });
+  const locations = useQuery({ queryKey: ["locations"], queryFn: () => get<{ items: Location[] }>("/api/locations"), enabled: canWrite });
+  const create = useMutation({
+    mutationFn: () => post<Invoice>("/api/invoices", { customerId: customer.id, locationId: locations.data!.items[0]!.id }),
+    onSuccess: (inv) => navigate(`/invoices/${inv.id}`),
+  });
+  return (
+    <Panel title={<>Billing {customer.balanceCents ? <span className="badge badge-danger">{formatMoney(customer.balanceCents)} due</span> : <span className="badge badge-success">No balance</span>}</>} bodyless
+      actions={canWrite && !customer.archivedAt && <button className="btn btn-small" disabled={create.isPending || !locations.data?.items.length} onClick={() => create.mutate()}>New invoice</button>}>
+      <ErrorAlert error={create.error} />
+      {list.isPending ? <div className="panel-body"><Loading /></div> : list.error ? <div className="panel-body"><ErrorAlert error={list.error} /></div> :
+        list.data.items.length === 0 ? <EmptyState title="No invoices yet" /> : (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Invoice</th><th scope="col" style={{ textAlign: "right" }}>Total</th><th scope="col">Status</th></tr></thead>
+              <tbody>{list.data.items.map((i) => (
+                <tr key={i.id}>
+                  <td><Link to={`/invoices/${i.id}`}>{invoiceLabel(i)}</Link></td>
+                  <td style={{ textAlign: "right" }}>{formatMoney(Number(i.totalCents))}</td>
+                  <td><InvoiceStatusBadge status={i.status} balanceCents={i.balanceCents} paidCents={Number(i.paidCents)} /></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+    </Panel>
+  );
+}
 
 export function CustomerDetailPage() {
   const { id } = useParams();
@@ -93,6 +130,7 @@ export function CustomerDetailPage() {
               </div>
             ) : <EmptyState title="No pets yet">Add this customer's pets to start booking stays.</EmptyState>}
           </Panel>
+          {c.balanceCents !== null && c.balanceCents !== undefined && <CustomerInvoices customer={c} />}
           <CustomerReservations customerId={c.id} canBook={canBook && !archived && c.status !== "banned"} />
           <History entityType="customer" entityId={c.id} />
         </div>

@@ -7,6 +7,7 @@ export function Layout() {
   const canReadCustomers = useCan("customers:read");
   const canReadPets = useCan("pets:read");
   const canReadReservations = useCan("reservations:read");
+  const canReadBilling = useCan("billing:read");
   return (
     <div className="shell">
       <a href="#main" className="skip-link">Skip to content</a>
@@ -21,6 +22,7 @@ export function Layout() {
           {canReadReservations && <NavLink to="/care">Today's care</NavLink>}
           {canReadReservations && <NavLink to="/reservations">Reservations</NavLink>}
           {canReadReservations && <NavLink to="/incidents">Incidents</NavLink>}
+          {canReadBilling && <NavLink to="/invoices">Invoices</NavLink>}
           <div className="nav-section">Clients</div>
           {canReadCustomers && <NavLink to="/customers">Customers</NavLink>}
           {canReadPets && <NavLink to="/pets">Pets</NavLink>}
@@ -28,7 +30,7 @@ export function Layout() {
             <>
               <div className="nav-section">Business</div>
               <NavLink to="/services">Services</NavLink>
-              <NavLink to="/capacity">Kennels &amp; capacity</NavLink>
+              <NavLink to="/capacity">Locations</NavLink>
             </>
           )}
         </nav>

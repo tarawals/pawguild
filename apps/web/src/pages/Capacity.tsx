@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RESOURCE_KIND_LABELS, RESOURCE_KINDS, type ResourceKind } from "@pawguild/shared";
+import { formatBps, parsePercentToBps, RESOURCE_KIND_LABELS, RESOURCE_KINDS, type ResourceKind } from "@pawguild/shared";
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, get, patch, post, put, type Location, type Resource } from "../api";
 import { useCan } from "../auth";
@@ -42,6 +42,38 @@ function LimitsForm({ location }: { location: Location }) {
       <div className="actions">
         <button className="btn btn-primary" type="submit" disabled={save.isPending}>Save limits</button>
         {saved && <span role="status" className="muted" style={{ alignSelf: "center" }}>Saved.</span>}
+      </div>
+    </form>
+  );
+}
+
+function TaxRateForm({ location }: { location: Location }) {
+  const qc = useQueryClient();
+  const canManage = useCan("locations:manage");
+  const [rate, setRate] = useState(formatBps(location.taxRateBps).replace("%", ""));
+  const [saved, setSaved] = useState(false);
+  const save = useMutation({
+    mutationFn: () => {
+      let taxRateBps: number;
+      try { taxRateBps = parsePercentToBps(rate); } catch (e) {
+        throw new ApiError(400, "validation_failed", "Some fields need attention.", [{ path: "taxRateBps", message: (e as Error).message }]);
+      }
+      return put(`/api/locations/${location.id}/tax-rate`, { taxRateBps });
+    },
+    onSuccess: () => { setSaved(true); qc.invalidateQueries({ queryKey: ["locations"] }); },
+  });
+  if (!canManage) return <p style={{ margin: 0 }}>Sales tax: {formatBps(location.taxRateBps)} on taxable services.</p>;
+  function onSubmit(e: FormEvent) { e.preventDefault(); setSaved(false); save.mutate(); }
+  return (
+    <form onSubmit={onSubmit} noValidate className="stack" aria-label={`Sales tax for ${location.name}`}>
+      <ErrorAlert error={save.error} />
+      <div className="form-grid">
+        <TextField label="Sales tax rate (%)" inputMode="decimal" hint="Applied to services marked taxable. Use 0 for no tax."
+          value={rate} onChange={(e) => setRate(e.target.value)} error={fieldErrors(save.error)("taxRateBps")} />
+      </div>
+      <div className="actions">
+        <button className="btn btn-primary" type="submit" disabled={save.isPending}>Save tax rate</button>
+        {saved && <span role="status" className="muted" style={{ alignSelf: "center" }}>Saved. Applies to new and draft invoices.</span>}
       </div>
     </form>
   );
@@ -124,13 +156,14 @@ export function CapacityPage() {
   const locations = useQuery({ queryKey: ["locations"], queryFn: () => get<{ items: Location[] }>("/api/locations") });
   return (
     <>
-      <PageHeader title="Kennels & capacity" description="How many pets each location can take, and the spaces pets are assigned to." />
+      <PageHeader title="Locations" description="Capacity, sales tax and the kennels and rooms at each location." />
       <ErrorAlert error={locations.error} />
       {locations.isPending ? <Loading /> : locations.data && (
         <div className="stack">
           {locations.data.items.map((l) => (
             <div key={l.id} className="stack">
               <Panel title={`Capacity limits — ${l.name}`}><LimitsForm location={l} /></Panel>
+              <Panel title={`Sales tax — ${l.name}`}><TaxRateForm location={l} /></Panel>
               <Resources location={l} />
             </div>
           ))}

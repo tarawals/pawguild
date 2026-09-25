@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
+import { formatMoney } from "@pawguild/shared";
 import { get, type DashboardSummary, type ReservationListItem } from "../api";
 import { useCan, useMe } from "../auth";
 import { useStatusChange } from "../components/StatusActions";
@@ -87,7 +88,13 @@ export function DashboardPage() {
             <div className="panel stat"><div className="label">Arriving today</div><div className="value">{summary.data.arrivals.length}</div></div>
             <div className="panel stat"><div className="label">Pets checked in</div><div className="value">{summary.data.petsCheckedIn}</div></div>
             <div className="panel stat"><div className="label">Departing today</div><div className="value">{summary.data.departures.length}</div></div>
-            <div className="panel stat"><div className="label">Active customers</div><div className="value">{summary.data.activeCustomers}</div></div>
+            {summary.data.outstanding ? (
+              <Link to="/invoices?status=unpaid" className="panel stat" style={{ textDecoration: "none", color: "inherit" }}>
+                <div className="label">Outstanding balances</div>
+                <div className="value">{formatMoney(summary.data.outstanding.cents)}</div>
+                <span className="muted" style={{ fontSize: "0.85rem" }}>{summary.data.outstanding.invoices} unpaid invoice{summary.data.outstanding.invoices === 1 ? "" : "s"}</span>
+              </Link>
+            ) : <div className="panel stat"><div className="label">Active customers</div><div className="value">{summary.data.activeCustomers}</div></div>}
           </div>
           <div className="stack" style={{ marginBottom: 16 }}>
             {(summary.data.medicationDue.length > 0 || summary.data.openIncidents.length > 0) && (
@@ -156,7 +163,7 @@ export function DashboardPage() {
             )}
           </Panel>
           <p className="muted" style={{ marginTop: 16 }}>
-            Balances will appear here once billing is added.
+            
           </p>
         </>
       )}
