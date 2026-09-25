@@ -157,6 +157,49 @@ export interface AuditLogTable {
   createdAt: CreatedAt;
 }
 
+export interface ServicesTable {
+  id: Generated<string>;
+  organizationId: string;
+  name: string;
+  category: string;
+  description: string | null;
+  priceCents: number;
+  priceUnit: string;
+  durationMinutes: number | null;
+  isActive: Generated<boolean>;
+  createdAt: CreatedAt;
+  updatedAt: Generated<Date>;
+}
+
+export interface ReservationsTable {
+  id: Generated<string>;
+  organizationId: string;
+  locationId: string;
+  customerId: string;
+  serviceId: string;
+  status: Generated<string>;
+  startsAt: Timestamp;
+  endsAt: Timestamp;
+  unitPriceCents: number;
+  priceUnit: string;
+  notes: string | null;
+  createdByUserId: string;
+  confirmedAt: Date | null;
+  checkedInAt: Date | null;
+  checkedOutAt: Date | null;
+  cancelledAt: Date | null;
+  cancellationReason: string | null;
+  createdAt: CreatedAt;
+  updatedAt: Generated<Date>;
+}
+
+export interface ReservationPetsTable {
+  organizationId: string;
+  reservationId: string;
+  customerId: string;
+  petId: string;
+}
+
 export interface Database {
   organizations: OrganizationsTable;
   locations: LocationsTable;
@@ -168,6 +211,9 @@ export interface Database {
   pets: PetsTable;
   petVaccinations: PetVaccinationsTable;
   auditLog: AuditLogTable;
+  services: ServicesTable;
+  reservations: ReservationsTable;
+  reservationPets: ReservationPetsTable;
 }
 
 export type Customer = Selectable<CustomersTable>;

@@ -3,16 +3,37 @@ import { sql } from "kysely";
 import { withTenant } from "../db";
 
 /**
- * Operational summary. Reservation, stay and care metrics will be added as those modules land;
- * everything here is computed from live records, never from stored counters.
+ * Operational summary: what needs attention today. Everything is computed from live records,
+ * never from stored counters. "Today" is the organization's local date.
  */
 export const dashboardRoutes: FastifyPluginAsync = async (app) => {
   app.get("/summary", { preHandler: app.authorize() }, async (req) => {
     return withTenant(app.db, req.auth, async (trx) => {
+      const { timezone } = await trx.selectFrom("organizations").select("timezone")
+        .where("id", "=", req.auth.orgId).executeTakeFirstOrThrow();
+      const localDate = (col: string) => sql`(${sql.ref(col)} at time zone ${timezone})::date`;
+      const today = sql`(now() at time zone ${timezone})::date`;
+
       const counts = await trx.selectNoFrom([
         sql<number>`(select count(*) from customers where archived_at is null)::int`.as("activeCustomers"),
         sql<number>`(select count(*) from pets where archived_at is null and status = 'active')::int`.as("activePets"),
+        sql<number>`(select count(*) from reservation_pets rp join reservations r on r.id = rp.reservation_id
+                     where r.status = 'checked_in')::int`.as("petsCheckedIn"),
       ]).executeTakeFirstOrThrow();
+
+      const reservationRow = (q: ReturnType<typeof base>) => q.orderBy("r.startsAt").limit(50).execute();
+      const base = () => trx.selectFrom("reservations as r")
+        .innerJoin("customers as c", "c.id", "r.customerId")
+        .innerJoin("services as s", "s.id", "r.serviceId")
+        .select(["r.id", "r.status", "r.startsAt", "r.endsAt", "s.name as serviceName"])
+        .select(sql<string>`c.first_name || ' ' || c.last_name`.as("customerName"))
+        .select(sql<string[]>`(select coalesce(array_agg(p.name order by p.name), '{}') from reservation_pets rp
+                 join pets p on p.id = rp.pet_id where rp.reservation_id = r.id)`.as("petNames"));
+
+      const [arrivals, departures] = await Promise.all([
+        reservationRow(base().where("r.status", "in", ["pending", "confirmed"]).where(localDate("r.starts_at"), "=", today)),
+        reservationRow(base().where("r.status", "=", "checked_in").where(localDate("r.ends_at"), "<=", today)),
+      ]);
 
       // Active pets whose latest (non-voided) record for any vaccine expires within 30 days or has expired.
       const vaccinationAlerts = await trx
@@ -25,13 +46,15 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         .where("p.archivedAt", "is", null)
         .where("p.status", "=", "active")
         .groupBy(["p.id", "p.name", "v.vaccine", "c.firstName", "c.lastName"])
-        .having(sql`max(v.expires_on)`, "<=", sql`current_date + 30`)
+        .having(sql`max(v.expires_on)`, "<=", sql`${today} + 30`)
         .orderBy(sql`max(v.expires_on)`)
         .limit(25)
         .execute();
 
       return {
         ...counts,
+        arrivals,
+        departures,
         vaccinationAlerts: vaccinationAlerts.map(({ firstName, lastName, ...v }) => ({
           ...v,
           customerName: `${firstName} ${lastName}`,

@@ -21,6 +21,14 @@ export async function seed(connectionString: string, password: string) {
       await trx.insertInto("locations")
         .values({ organizationId: org.id, name: "Harbor Hounds — Downtown", city: "Portland", region: "ME", country: "US", daycareCapacity: 40 })
         .execute();
+      await trx.insertInto("services").values([
+        { organizationId: org.id, name: "Daycare — Full Day", category: "daycare", priceCents: 3800, priceUnit: "per_day" },
+        { organizationId: org.id, name: "Daycare — Half Day", category: "daycare", priceCents: 2600, priceUnit: "per_day" },
+        { organizationId: org.id, name: "Boarding — Standard Suite", category: "boarding", priceCents: 5500, priceUnit: "per_night" },
+        { organizationId: org.id, name: "Full Groom", category: "grooming", priceCents: 8500, priceUnit: "per_visit", durationMinutes: 120 },
+        { organizationId: org.id, name: "Bath & Brush", category: "grooming", priceCents: 4000, priceUnit: "per_visit", durationMinutes: 60 },
+        { organizationId: org.id, name: "Nail Trim", category: "add_on", priceCents: 1500, priceUnit: "per_visit", durationMinutes: 15 },
+      ]).execute();
       const passwordHash = await hashPassword(password);
       const staff = [
         { email: "owner@harborhounds.example", firstName: "Jordan", lastName: "Reyes", role: "owner" },

@@ -19,3 +19,7 @@ export const forbidden = () =>
 
 export const unauthenticated = () =>
   new AppError(401, "unauthenticated", "Your session has ended. Please sign in again.");
+
+/** A 400 validation failure for one field, rendered like zod errors. */
+export const fieldError = (path: string, message: string) =>
+  new AppError(400, "validation_failed", "Some fields need attention.", [{ path, message }]);

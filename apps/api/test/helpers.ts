@@ -44,6 +44,8 @@ export async function createOrg(ownerDb: Db, roles: Role[] = ["owner"]) {
   const passwordHash = await hash;
   const org = await ownerDb.insertInto("organizations")
     .values({ name: `Test Org ${suffix}`, slug: `test-${suffix}` }).returning("id").executeTakeFirstOrThrow();
+  const location = await ownerDb.insertInto("locations")
+    .values({ organizationId: org.id, name: "Main" }).returning("id").executeTakeFirstOrThrow();
   const users: Record<string, { id: string; email: string }> = {};
   for (const role of roles) {
     const email = `${role}-${suffix}@example.test`;
@@ -52,7 +54,7 @@ export async function createOrg(ownerDb: Db, roles: Role[] = ["owner"]) {
     await ownerDb.insertInto("memberships").values({ organizationId: org.id, userId: user.id, role }).execute();
     users[role] = { id: user.id, email };
   }
-  return { orgId: org.id, users };
+  return { orgId: org.id, locationId: location.id, users };
 }
 
 type App = Awaited<ReturnType<typeof setupTestApp>>["app"];

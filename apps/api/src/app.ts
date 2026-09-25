@@ -11,7 +11,10 @@ import { auditRoutes } from "./routes/audit";
 import { authRoutes } from "./routes/auth";
 import { customerRoutes } from "./routes/customers";
 import { dashboardRoutes } from "./routes/dashboard";
+import { locationRoutes } from "./routes/locations";
 import { petRoutes } from "./routes/pets";
+import { reservationRoutes } from "./routes/reservations";
+import { serviceRoutes } from "./routes/services";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -92,6 +95,9 @@ export async function buildApp(opts: { db: Db; config: Config; logger?: boolean 
         },
       });
     }
+    if (err instanceof AppError && err.code === "validation_failed") {
+      return reply.status(400).send({ error: { code: err.code, message: err.message, fields: err.details ?? [] } });
+    }
     if (err instanceof AppError) {
       return reply
         .status(err.statusCode)
@@ -118,6 +124,9 @@ export async function buildApp(opts: { db: Db; config: Config; logger?: boolean 
   await app.register(customerRoutes, { prefix: "/api/customers" });
   await app.register(petRoutes, { prefix: "/api/pets" });
   await app.register(auditRoutes, { prefix: "/api/audit" });
+  await app.register(serviceRoutes, { prefix: "/api/services" });
+  await app.register(locationRoutes, { prefix: "/api/locations" });
+  await app.register(reservationRoutes, { prefix: "/api/reservations" });
   await app.register(dashboardRoutes, { prefix: "/api/dashboard" });
   return app;
 }
