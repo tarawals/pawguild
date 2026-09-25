@@ -184,3 +184,58 @@ export const capacityLimitsInput = z.object({
 export const assignmentsInput = z.object({
   assignments: z.array(z.object({ petId: z.uuid(), resourceId: z.uuid().nullable() })).min(1).max(20),
 });
+
+// ---- Care records -------------------------------------------------------------------------
+
+const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a time like 08:00");
+
+export const medicationInput = z.object({
+  name: z.string().trim().min(1, "Medication name is required").max(200),
+  dosage: z.string().trim().min(1, "Dosage is required").max(200),
+  instructions: optionalText(2000),
+  times: z.array(timeOfDay).max(12).default([]),
+});
+
+const careBase = {
+  petId: z.uuid(),
+  /** Defaults to now. Can be backdated (e.g. logging after the fact) but not in the future. */
+  occurredAt: z.iso.datetime({ offset: true }).optional(),
+  notes: optionalText(2000),
+};
+
+export const careLogInput = z.discriminatedUnion("kind", [
+  z.object({ ...careBase, kind: z.literal("feeding"), meal: z.enum(["breakfast", "lunch", "dinner", "snack"]), amountEaten: z.enum(["all", "most", "some", "none"]) }),
+  z.object({
+    ...careBase, kind: z.literal("medication"), medicationId: z.uuid(),
+    status: z.enum(["given", "refused", "skipped"]),
+    /** The scheduled dose this entry fulfils (from the due list); omit for as-needed doses. */
+    scheduledFor: z.iso.datetime({ offset: true }).optional(),
+  }),
+  z.object({ ...careBase, kind: z.enum(["potty", "walk", "play", "rest", "grooming", "note"]) }),
+]);
+export type CareLogInput = z.input<typeof careLogInput>;
+
+export const voidInput = z.object({
+  reason: z.string().trim().min(1, "Give a reason").max(1000),
+});
+
+export const incidentInput = z.object({
+  petId: z.uuid(),
+  reservationId: z.uuid().nullable().optional(),
+  occurredAt: z.iso.datetime({ offset: true }).optional(),
+  category: z.enum(["injury", "illness", "behavior", "altercation", "escape", "property", "other"]),
+  severity: z.enum(["low", "medium", "high"]),
+  description: z.string().trim().min(1, "Describe what happened").max(5000),
+  actionsTaken: optionalText(5000),
+  ownerNotified: z.boolean().default(false),
+  followUpRequired: z.boolean().default(false),
+});
+
+/** Follow-up and resolution; the original description can't be changed. */
+export const incidentUpdateInput = z.object({
+  actionsTaken: optionalText(5000),
+  ownerNotified: z.boolean().optional(),
+  followUpRequired: z.boolean().optional(),
+  followUpNotes: optionalText(5000),
+  resolution: z.string().trim().min(1).max(5000).optional(),
+});

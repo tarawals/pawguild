@@ -26,6 +26,12 @@ describe("permissions", () => {
     for (const role of ["owner", "administrator", "general_manager", "location_manager", "manager"] as const)
       expect(hasPermission(role, "stays:override_vaccinations")).toBe(true);
   });
+  it("only lets managers and above resolve incidents; care staff can report them", () => {
+    expect(hasPermission("care_attendant", "incidents:record")).toBe(true);
+    for (const role of ["front_desk", "shift_lead", "groomer", "care_attendant", "employee"] as const)
+      expect(hasPermission(role, "incidents:resolve")).toBe(false);
+    expect(hasPermission("manager", "incidents:resolve")).toBe(true);
+  });
   it("defines only known permissions for every role", () => {
     for (const role of ROLES)
       for (const p of ROLE_PERMISSIONS[role]) expect(PERMISSIONS).toContain(p);
