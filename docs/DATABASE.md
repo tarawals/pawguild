@@ -119,6 +119,20 @@ Tax: computed once per invoice on the sum of taxable lines after discounts, roun
 (`packages/shared/src/invoice.ts` and the same formula in the trigger).
 Balance: issued invoice totals minus non-voided payments (`customerBalance` in `routes/billing.ts`).
 
+## 0007_credits_refunds
+
+| Table | Purpose | Notes |
+|---|---|---|
+| `invoice_credit_notes` | Reduce what's owed on an issued invoice | total credited ≤ invoice total (trigger); reason required |
+| `refunds` | Money back to the customer | from an invoice overpayment (`invoice_id` set, ≤ overpaid, trigger) or from account credit (`invoice_id` null); method `account_credit` moves an overpayment onto credit |
+| `account_credits` | Signed ledger of customer credit | `received` (deposit/prepayment, with method, optional `reservation_id`), `from_invoice`, `reversal` (voided credit payment) are positive; `applied` and `refunded` are negative; the balance can never go below zero (constraint trigger with a customer row lock) |
+| `payments.method` | now also `account_credit` | a payment made by applying credit; voiding it writes a `reversal` |
+
+- Invoice balance = total − credit notes − (payments − invoice refunds). A negative balance means the
+  invoice is overpaid (listed under "Overpaid" and counted on the dashboard).
+- All three tables are INSERT-only for the application role. Corrections are new entries.
+- Payments on an invoice that has refunds can't be voided (credit notes and refunds are used instead).
+
 Tables without RLS: `users` and `sessions`. They are identity data that login needs before a
 tenant is known, and the app only reaches them by id, email or token hash.
 `organizations` and `memberships` have RLS that also lets a user see their own memberships.

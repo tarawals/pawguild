@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-09-25 (session 6: billing part 1)_
+_Last updated: 2026-09-25 (session 7: billing part 2)_
 
 ## Built and tested
 
@@ -23,14 +23,16 @@ _Last updated: 2026-09-25 (session 6: billing part 1)_
 | **Sales tax** (rate per location; on/off per service) | ✅ | ✅ | `locations:manage` (rate); `services:manage` (toggle) | Locations page; Taxed switch on Services | unit + integration + e2e |
 | **Invoices** (from a reservation at the booked rate, or manual; service/custom lines; per-line $ or % discounts; issue locks the invoice and assigns a gap-free number; void; print) | ✅ + DB triggers | ✅ | `billing:read/write`; voiding issued invoices is `billing:refund` (managers) | Invoices list, invoice page, Billing panel on reservations and customers | unit + integration + e2e |
 | **Payments and balances** (can't exceed the balance; managers void mistakes; customer balance; dashboard outstanding) | ✅ | ✅ | `billing:write`; void `billing:refund` | Record payment on invoice | integration + e2e |
-| Dashboard (outstanding balances, medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
+| **Credit notes and refunds** (managers; reason required; refund to card/cash/check/other or to account credit; never more than overpaid) | ✅ + DB triggers | ✅ | `billing:refund` | Credits and refunds panel on invoices; Overpaid filter | unit + integration + e2e |
+| **Account credit and deposits** (deposit on a reservation or prepayment; apply to invoices; refund credit; never negative) | ✅ + DB trigger | ✅ | take/apply: `billing:write`; refund: `billing:refund` | Account credit panel on customers; Take deposit on reservations; Apply credit on invoices | integration + e2e |
+| Dashboard (outstanding balances and overpaid invoices, medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
 | Audit log (append-only, field diffs) | ✅ | read endpoint | `audit:read` | history panels (customer, pet, reservation) | integration |
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results: typecheck ✅, 35 shared unit tests ✅, 67 API integration tests ✅,
-4 web tests ✅, 15 Playwright e2e tests ✅. An exploratory browser QA pass (13 billing scenarios) against
-an upgraded copy of the previous version's database also passed, with no console errors.
+Latest check results: typecheck ✅, 36 shared unit tests ✅, 76 API integration tests ✅,
+4 web tests ✅, 17 Playwright e2e tests ✅. An exploratory browser QA pass (8 credit and refund scenarios)
+against an upgraded copy of the previous version's database also passed, with no console errors.
 
 ## Not built yet (in scope, by priority)
 
@@ -56,9 +58,12 @@ an upgraded copy of the previous version's database also passed, with no console
 - Dates and times display in the browser's time zone, while medication times and "today" use the
   business's time zone. These match when staff computers are set to the business's time zone.
   Showing everything in the location's zone is future work.
-- Refunds, account credit and deposits aren't built yet. An overpayment is refused rather than
-  held as credit. A refund can currently only be represented by voiding the payment
-  (manager-only, with a reason).
+- Credit notes are a single amount that includes any tax. Tax isn't split out of a credit note,
+  so tax reports would need that split later.
+- Refunds and credit entries can't be voided (they're append-only). A mistaken refund has to be
+  corrected with a new entry, such as taking a payment or credit again.
+- A deposit is held as general account credit for the customer. It's linked to its reservation for
+  display, but it can be applied to any of that customer's invoices.
 - There's one tax rate per location. Multiple tax jurisdictions and tax-exempt customers aren't supported.
 - Feeding has no schedule (only instructions and a log), so feeding isn't in a "due" list yet.
 - Vaccine names are free text, matched case-insensitively. "Bordetella" and "Kennel cough" won't
@@ -79,8 +84,9 @@ an upgraded copy of the previous version's database also passed, with no console
 
 ## Next recommended step
 
-**Billing part 2:** refunds recorded against a payment (partial allowed, reason required,
-managers only, never exceeding what was paid), then account credit. When a refund is owed to
-credit instead of cash, or a customer overpays, the credit becomes a customer ledger entry that
-can be applied to a later invoice. Balances then include credit. Deposits on reservations follow
-once credit exists.
+**Check-out review:** when checking a pet out, show one panel with:
+- today's care summary and any open incidents
+- the pet's belongings or notes
+- the invoice status: create the invoice if there isn't one, apply the deposit, take payment
+
+The aim is that a front-desk check-out is one screen. After that: reports.
