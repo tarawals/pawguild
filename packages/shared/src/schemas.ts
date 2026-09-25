@@ -105,6 +105,8 @@ export const serviceInput = z.object({
   priceUnit: z.enum(["per_day", "per_night", "per_visit"]),
   durationMinutes: z.number().int().positive().max(24 * 60).nullable().optional(),
   isActive: z.boolean().optional(),
+  /** Whether sales tax applies to this service (at the location's rate). */
+  isTaxable: z.boolean().optional(),
   /** Vaccines a pet of each species must have, valid through the stay. Replaces the whole set. */
   vaccineRequirements: z.object({
     dog: z.array(z.string().trim().min(1).max(100)).max(20),
@@ -238,4 +240,37 @@ export const incidentUpdateInput = z.object({
   followUpRequired: z.boolean().optional(),
   followUpNotes: optionalText(5000),
   resolution: z.string().trim().min(1).max(5000).optional(),
+});
+
+// ---- Billing -------------------------------------------------------------------------------
+
+export const taxRateInput = z.object({
+  taxRateBps: z.number().int().min(0, "Tax rate can't be negative").max(10_000, "Tax rate can't be over 100%"),
+});
+
+const cents = z.number().int("Amounts are in whole cents");
+
+export const invoiceLineInput = z.object({
+  /** Optional: fills description, price and taxable from the service. */
+  serviceId: z.uuid().optional(),
+  description: z.string().trim().min(1, "Description is required").max(300).optional(),
+  quantity: z.number().int().min(1, "Quantity must be at least 1").max(1000),
+  unitPriceCents: cents.min(0, "Price can't be negative").max(100_000_000).optional(),
+  discountCents: cents.min(0, "Discount can't be negative").default(0),
+  taxable: z.boolean().optional(),
+});
+
+export const invoiceCreateInput = z.object({
+  customerId: z.uuid(),
+  locationId: z.uuid(),
+  notes: optionalText(2000),
+});
+
+export const invoiceVoidInput = z.object({ reason: z.string().trim().min(1, "Give a reason for voiding").max(1000) });
+
+export const paymentInput = z.object({
+  amountCents: cents.min(1, "Enter an amount greater than zero").max(100_000_000),
+  method: z.enum(["card", "cash", "check", "other"]),
+  reference: optionalText(200),
+  receivedAt: z.iso.datetime({ offset: true }).optional(),
 });

@@ -3,6 +3,7 @@ export * from "./pricing";
 export * from "./capacity";
 export * from "./vaccinations";
 export * from "./care";
+export * from "./invoice";
 export * from "./permissions";
 export * from "./reservation-status";
 export * from "./schemas";
