@@ -34,8 +34,8 @@ _Last updated: 2026-09-29 (session 10: staff administration)_
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results (2026-09-29): typecheck ✅, 36 shared unit tests ✅, 118 API integration tests ✅,
-4 web tests ✅, 27 Playwright e2e tests ✅, including a run between 11pm and midnight in the business's time zone.
+Latest check results (2026-09-29): typecheck ✅, 38 shared unit tests ✅, 131 API integration tests ✅,
+4 web tests ✅, 32 Playwright e2e tests ✅.
 
 ## Not built yet (in scope, by priority)
 
