@@ -334,3 +334,12 @@ export const changePasswordInput = z.object({
   currentPassword: z.string().min(1, "Enter your current password").max(200),
   newPassword,
 });
+
+// ---- Reports -------------------------------------------------------------------------------
+
+/** Inclusive local-date range, at most about a year. */
+export const reportRangeQuery = z.object({
+  from: isoDate,
+  to: isoDate,
+}).refine((r) => r.from <= r.to, { message: "The start date must be on or before the end date", path: ["to"] })
+  .refine((r) => (Date.parse(r.to) - Date.parse(r.from)) / 86_400_000 <= 366, { message: "Choose a range of a year or less", path: ["to"] });

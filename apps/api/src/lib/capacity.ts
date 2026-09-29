@@ -18,6 +18,8 @@ export async function locationTimezone(trx: Tx, locationId: string): Promise<str
 /** Pets booked at a location for each period of a category. */
 export async function occupancy(trx: Tx, args: {
   locationId: string; category: CapacityCategory; periods: string[]; timeZone: string; excludeReservationId?: string;
+  /** Which statuses occupy space. Capacity checks use active stays; reports add completed ones. */
+  statuses?: readonly string[];
 }): Promise<PeriodOccupancy[]> {
   if (args.periods.length === 0) return [];
   const tz = args.timeZone;
@@ -32,7 +34,7 @@ export async function occupancy(trx: Tx, args: {
          join reservations r on r.id = rp.reservation_id
          join services s on s.id = r.service_id
         where r.location_id = ${args.locationId}
-          and r.status in ('pending', 'confirmed', 'checked_in')
+          and r.status = any(${args.statuses ?? ["pending", "confirmed", "checked_in"]}::text[])
           and s.category = ${args.category}
           and r.id is distinct from ${args.excludeReservationId ?? null}::uuid
           and ${covers})::int as booked

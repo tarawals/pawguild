@@ -86,6 +86,10 @@ const probes: Probe[] = [
   { name: "add staff", method: "POST", url: () => "/api/employees", body: {}, allowed: needs("employees:manage") },
   { name: "change password (self)", method: "POST", url: () => "/api/auth/change-password", body: {}, allowed: anyone },
   { name: "audit history", method: "GET", url: () => "/api/audit", allowed: needs("audit:read") },
+  { name: "sales report", method: "GET", url: () => "/api/reports/sales?from=2026-01-01&to=2026-01-31", allowed: needs("reports:read") },
+  { name: "payments report", method: "GET", url: () => "/api/reports/payments", allowed: needs("reports:read") },
+  { name: "balances report", method: "GET", url: () => "/api/reports/balances", allowed: needs("reports:read") },
+  { name: "occupancy report", method: "GET", url: () => "/api/reports/occupancy?from=2026-01-01&to=2026-01-07", allowed: needs("reports:read") },
 ];
 
 describe("permission matrix", () => {
