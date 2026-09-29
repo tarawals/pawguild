@@ -1,10 +1,11 @@
-import { loginInput, permissionsFor, isRole, ROLE_LABELS } from "@pawguild/shared";
+import { changePasswordInput, loginInput, permissionsFor, isRole, ROLE_LABELS } from "@pawguild/shared";
 import type { FastifyPluginAsync } from "fastify";
-import { DUMMY_HASH_PROMISE, verifyPassword } from "../auth/password";
-import { createSession, revokeSession, SESSION_COOKIE } from "../auth/session";
+import { DUMMY_HASH_PROMISE, hashPassword, verifyPassword } from "../auth/password";
+import { createSession, revokeSession, revokeUserSessions, SESSION_COOKIE } from "../auth/session";
 import { checkLoginThrottle, recordLoginAttempt } from "../auth/throttle";
 import { withTenant, withUser } from "../db";
-import { AppError } from "../lib/errors";
+import { AppError, fieldError } from "../lib/errors";
+import { recordAudit } from "../lib/audit";
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   app.post("/login", async (req, reply) => {
@@ -84,7 +85,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     return withTenant(app.db, auth, async (trx) => {
       const user = await trx
         .selectFrom("users")
-        .select(["id", "email", "firstName", "lastName"])
+        .select(["id", "email", "firstName", "lastName", "mustChangePassword"])
         .where("id", "=", auth.userId)
         .executeTakeFirstOrThrow();
       const org = await trx
@@ -101,5 +102,19 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         permissions: [...permissionsFor(auth.role)],
       };
     });
+  });
+
+  /** Change your own password. Signs out your other devices. */
+  app.post("/change-password", { preHandler: app.authorize() }, async (req) => {
+    const { currentPassword, newPassword } = changePasswordInput.parse(req.body);
+    const user = await app.db.selectFrom("users").select(["id", "email", "passwordHash"]).where("id", "=", req.auth.userId).executeTakeFirstOrThrow();
+    if (!(await verifyPassword(currentPassword, user.passwordHash))) throw fieldError("currentPassword", "That isn't your current password");
+    if (newPassword === currentPassword) throw fieldError("newPassword", "Choose a password different from the current one");
+    if (newPassword.toLowerCase() === user.email) throw fieldError("newPassword", "Don't use your email address as your password");
+    await app.db.updateTable("users").set({ passwordHash: await hashPassword(newPassword), mustChangePassword: false, passwordChangedAt: new Date() })
+      .where("id", "=", user.id).execute();
+    await revokeUserSessions(app.db, user.id, req.auth.sessionId);
+    await withTenant(app.db, req.auth, (trx) => recordAudit(trx, req.auth, { action: "auth.password_changed", entityType: "user", entityId: user.id }));
+    return { ok: true };
   });
 };

@@ -82,6 +82,9 @@ const probes: Probe[] = [
   { name: "view account credit", method: "GET", url: () => `/api/customers/${ids.customer}/credits`, allowed: needs("billing:read") },
   { name: "take deposit", method: "POST", url: () => `/api/customers/${ids.customer}/credits`, body: {}, allowed: needs("billing:write") },
   { name: "refund credit", method: "POST", url: () => `/api/customers/${ids.customer}/credits/refund`, body: {}, allowed: needs("billing:refund") },
+  { name: "list staff", method: "GET", url: () => "/api/employees", allowed: needs("employees:read") },
+  { name: "add staff", method: "POST", url: () => "/api/employees", body: {}, allowed: needs("employees:manage") },
+  { name: "change password (self)", method: "POST", url: () => "/api/auth/change-password", body: {}, allowed: anyone },
   { name: "audit history", method: "GET", url: () => "/api/audit", allowed: needs("audit:read") },
 ];
 

@@ -22,7 +22,7 @@ export async function findSession(db: Db, token: string) {
   return db
     .selectFrom("sessions as s")
     .innerJoin("users as u", "u.id", "s.userId")
-    .select(["s.id as sessionId", "s.userId", "s.organizationId", "s.expiresAt"])
+    .select(["s.id as sessionId", "s.userId", "s.organizationId", "s.expiresAt", "u.mustChangePassword"])
     .where("s.tokenHash", "=", hashToken(token))
     .where("s.revokedAt", "is", null)
     .where("s.expiresAt", ">", new Date())
@@ -37,4 +37,11 @@ export async function revokeSession(db: Db, token: string) {
     .where("tokenHash", "=", hashToken(token))
     .where("revokedAt", "is", null)
     .execute();
+}
+
+/** Sign a user out everywhere (optionally keeping one session, e.g. the one changing the password). */
+export async function revokeUserSessions(db: Db, userId: string, exceptSessionId?: string) {
+  let q = db.updateTable("sessions").set({ revokedAt: new Date() }).where("userId", "=", userId).where("revokedAt", "is", null);
+  if (exceptSessionId) q = q.where("id", "<>", exceptSessionId);
+  await q.execute();
 }

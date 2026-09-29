@@ -49,6 +49,8 @@ export interface UsersTable {
   phone: string | null;
   isActive: Generated<boolean>;
   lastLoginAt: Date | null;
+  mustChangePassword: Generated<boolean>;
+  passwordChangedAt: Date | null;
   createdAt: CreatedAt;
   updatedAt: Generated<Date>;
 }

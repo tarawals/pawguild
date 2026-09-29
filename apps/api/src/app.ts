@@ -14,6 +14,7 @@ import { careRoutes } from "./routes/care";
 import { incidentRoutes } from "./routes/incidents";
 import { medicationRoutes } from "./routes/medications";
 import { customerRoutes } from "./routes/customers";
+import { employeeRoutes } from "./routes/employees";
 import { dashboardRoutes } from "./routes/dashboard";
 import { locationRoutes } from "./routes/locations";
 import { petRoutes } from "./routes/pets";
@@ -32,6 +33,9 @@ declare module "fastify" {
     auth: AuthContext;
   }
 }
+
+/** Routes usable while a temporary password is still in place. */
+const PASSWORD_CHANGE_ALLOWED = new Set(["/api/auth/me", "/api/auth/change-password", "/api/auth/logout"]);
 
 const PG_ERROR_MESSAGES: Record<string, [number, string, string]> = {
   "23505": [409, "conflict", "That conflicts with an existing record (for example a duplicate email)."],
@@ -75,6 +79,10 @@ export async function buildApp(opts: { db: Db; config: Config; logger?: boolean 
           .executeTakeFirst(),
     );
     if (!membership || !membership.isActive || !isRole(membership.role)) throw unauthenticated();
+    // A temporary password must be replaced before anything else is allowed.
+    if (session.mustChangePassword && !PASSWORD_CHANGE_ALLOWED.has(req.routeOptions.url ?? "")) {
+      throw new AppError(403, "password_change_required", "Please choose a new password before continuing.");
+    }
     const permissions = permissionsFor(membership.role);
     req.auth = {
       sessionId: session.sessionId,
@@ -133,6 +141,7 @@ export async function buildApp(opts: { db: Db; config: Config; logger?: boolean 
   app.get("/api/health", async () => ({ ok: true }));
   await app.register(authRoutes, { prefix: "/api/auth" });
   await app.register(customerRoutes, { prefix: "/api/customers" });
+  await app.register(employeeRoutes, { prefix: "/api/employees" });
   await app.register(petRoutes, { prefix: "/api/pets" });
   await app.register(medicationRoutes, { prefix: "/api/pets" });
   await app.register(careRoutes, { prefix: "/api" });

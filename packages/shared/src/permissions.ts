@@ -118,3 +118,33 @@ export function permissionsFor(role: Role): ReadonlySet<Permission> {
 export function hasPermission(role: Role, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role].includes(permission);
 }
+
+/**
+ * Seniority for staff management. Staff can only create, change or deactivate people junior to
+ * them, and only assign roles junior to their own, so nobody can grant more access than they
+ * have. Owners are the exception: they can manage anyone, including other owners.
+ */
+export const ROLE_RANK: Record<Role, number> = {
+  owner: 100,
+  administrator: 90,
+  general_manager: 80,
+  location_manager: 70,
+  manager: 60,
+  shift_lead: 50,
+  front_desk: 40,
+  groomer: 30,
+  care_attendant: 30,
+  employee: 10,
+};
+
+export function canAssignRole(actor: Role, role: Role): boolean {
+  if (!hasPermission(actor, "employees:manage")) return false;
+  return actor === "owner" || ROLE_RANK[role] < ROLE_RANK[actor];
+}
+
+export function canManageStaffMember(actor: Role, target: Role): boolean {
+  if (!hasPermission(actor, "employees:manage")) return false;
+  return actor === "owner" || ROLE_RANK[target] < ROLE_RANK[actor];
+}
+
+export const PASSWORD_MIN_LENGTH = 10;

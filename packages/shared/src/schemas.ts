@@ -302,3 +302,35 @@ export const creditApplyInput = z.object({ amountCents: positiveCents });
 
 /** Pay account credit back out to the customer. */
 export const creditRefundInput = z.object({ amountCents: positiveCents, method: moneyMethod, reference: optionalText(200), reason });
+
+// ---- Staff ---------------------------------------------------------------------------------
+
+const role = z.enum(["owner", "administrator", "general_manager", "location_manager", "manager", "shift_lead", "front_desk", "groomer", "care_attendant", "employee"]);
+const newPassword = z.string().min(10, "Use at least 10 characters").max(200);
+
+export const employeeCreateInput = z.object({
+  firstName: z.string().trim().min(1, "First name is required").max(100),
+  lastName: z.string().trim().min(1, "Last name is required").max(100),
+  email: z.email("Enter a valid email address").max(254).transform((v) => v.toLowerCase()),
+  phone: optionalText(40),
+  role,
+  jobTitle: optionalText(100),
+  locationIds: z.array(z.uuid()).max(50).default([]),
+  temporaryPassword: newPassword,
+});
+
+export const employeeUpdateInput = z.object({
+  firstName: z.string().trim().min(1).max(100).optional(),
+  lastName: z.string().trim().min(1).max(100).optional(),
+  phone: optionalText(40),
+  role: role.optional(),
+  jobTitle: optionalText(100),
+  locationIds: z.array(z.uuid()).max(50).optional(),
+});
+
+export const passwordResetInput = z.object({ temporaryPassword: newPassword });
+
+export const changePasswordInput = z.object({
+  currentPassword: z.string().min(1, "Enter your current password").max(200),
+  newPassword,
+});

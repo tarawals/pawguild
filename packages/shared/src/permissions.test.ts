@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PERMISSIONS, ROLES, ROLE_PERMISSIONS, hasPermission } from "./permissions";
+import { PERMISSIONS, ROLES, ROLE_PERMISSIONS, ROLE_RANK, hasPermission } from "./permissions";
 
 describe("permissions", () => {
   it("gives owners every permission", () => {
@@ -35,5 +35,27 @@ describe("permissions", () => {
   it("defines only known permissions for every role", () => {
     for (const role of ROLES)
       for (const p of ROLE_PERMISSIONS[role]) expect(PERMISSIONS).toContain(p);
+  });
+});
+
+import { canAssignRole, canManageStaffMember } from "./permissions";
+describe("staff management seniority", () => {
+  it("never lets anyone grant a role at or above their own (except owners)", () => {
+    for (const actor of ROLES) for (const role of ROLES) {
+      if (actor !== "owner" && canAssignRole(actor, role)) expect(ROLE_RANK[role]).toBeLessThan(ROLE_RANK[actor]);
+    }
+    expect(canAssignRole("owner", "owner")).toBe(true);
+    expect(canAssignRole("administrator", "owner")).toBe(false);
+    expect(canAssignRole("administrator", "administrator")).toBe(false);
+    expect(canAssignRole("general_manager", "location_manager")).toBe(true);
+    expect(canAssignRole("location_manager", "general_manager")).toBe(false);
+    expect(canAssignRole("location_manager", "front_desk")).toBe(true);
+  });
+  it("only roles with employees:manage can manage staff, and only juniors", () => {
+    expect(canManageStaffMember("manager", "front_desk")).toBe(false); // managers lack employees:manage
+    expect(canManageStaffMember("front_desk", "employee")).toBe(false);
+    expect(canManageStaffMember("general_manager", "general_manager")).toBe(false);
+    expect(canManageStaffMember("administrator", "owner")).toBe(false);
+    expect(canManageStaffMember("owner", "owner")).toBe(true);
   });
 });
