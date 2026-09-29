@@ -204,6 +204,24 @@ export interface ReservationPetsTable {
   resourceId: string | null;
 }
 
+export interface LocationHoursTable {
+  id: Generated<string>;
+  organizationId: string;
+  locationId: string;
+  weekday: number;
+  /** TIME columns are returned as 'HH:MM:SS' strings. */
+  opensAt: string;
+  closesAt: string;
+}
+
+export interface LocationClosuresTable {
+  id: Generated<string>;
+  organizationId: string;
+  locationId: string;
+  closedOn: DateString;
+  reason: string | null;
+}
+
 export interface LocationCapacitiesTable {
   organizationId: string;
   locationId: string;
@@ -414,6 +432,8 @@ export interface Database {
   reservations: ReservationsTable;
   reservationPets: ReservationPetsTable;
   locationCapacities: LocationCapacitiesTable;
+  locationHours: LocationHoursTable;
+  locationClosures: LocationClosuresTable;
   resources: ResourcesTable;
   serviceVaccineRequirements: ServiceVaccineRequirementsTable;
   petMedications: PetMedicationsTable;

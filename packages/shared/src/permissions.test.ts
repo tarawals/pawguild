@@ -20,6 +20,12 @@ describe("permissions", () => {
     for (const role of ["owner", "administrator", "general_manager", "location_manager", "manager"] as const)
       expect(hasPermission(role, "reservations:override_capacity")).toBe(true);
   });
+  it("only lets managers and above book outside business hours", () => {
+    for (const role of ["front_desk", "shift_lead", "groomer", "care_attendant", "employee"] as const)
+      expect(hasPermission(role, "reservations:override_hours")).toBe(false);
+    for (const role of ["owner", "administrator", "general_manager", "location_manager", "manager"] as const)
+      expect(hasPermission(role, "reservations:override_hours")).toBe(true);
+  });
   it("only lets managers and above check in without required vaccinations", () => {
     for (const role of ["front_desk", "shift_lead", "groomer", "care_attendant", "employee"] as const)
       expect(hasPermission(role, "stays:override_vaccinations")).toBe(false);

@@ -131,6 +131,8 @@ export const reservationInput = z
     status: z.enum(["pending", "confirmed"]).default("pending"),
     /** Book even when a capacity limit is reached. Requires reservations:override_capacity. */
     overrideCapacity: z.boolean().optional(),
+    /** Book drop-off or pick-up outside business hours or on a closed day. Requires reservations:override_hours. */
+    overrideHours: z.boolean().optional(),
   })
   .refine((r) => new Date(r.endsAt) > new Date(r.startsAt), {
     message: "End must be after the start", path: ["endsAt"],
@@ -146,6 +148,7 @@ export const reservationUpdateInput = z
     endsAt: instant.optional(),
     notes: optionalText(5000),
     overrideCapacity: z.boolean().optional(),
+    overrideHours: z.boolean().optional(),
   });
 
 export const reservationStatusInput = z.object({
@@ -343,3 +346,46 @@ export const reportRangeQuery = z.object({
   to: isoDate,
 }).refine((r) => r.from <= r.to, { message: "The start date must be on or before the end date", path: ["to"] })
   .refine((r) => (Date.parse(r.to) - Date.parse(r.from)) / 86_400_000 <= 366, { message: "Choose a range of a year or less", path: ["to"] });
+
+/** True for an IANA time zone name this runtime knows, e.g. "America/New_York". */
+export function isValidTimeZone(tz: string): boolean {
+  try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); return tz.includes("/") || tz === "UTC"; } catch { return false; }
+}
+
+const locationFields = {
+  name: z.string().trim().min(1, "Location name is required").max(100),
+  addressLine1: optionalText(200),
+  addressLine2: optionalText(200),
+  city: optionalText(100),
+  region: optionalText(100),
+  postalCode: optionalText(20),
+  country: z.string().trim().toUpperCase().regex(/^([A-Z]{2})?$/, "Use a two-letter country code, like US")
+    .transform((v) => (v === "" ? null : v)).nullable().optional(),
+  phone: optionalText(40),
+  email: z.union([z.literal(""), z.email("Enter a valid email address").max(254)])
+    .transform((v) => (v === "" ? null : v.toLowerCase())).nullable().optional(),
+  /** null = use the organization's time zone. */
+  timezone: z.string().trim().max(64)
+    .transform((v) => (v === "" ? null : v))
+    .refine((v) => v === null || isValidTimeZone(v), "Choose a time zone from the list")
+    .nullable().optional(),
+};
+export const locationInput = z.object(locationFields);
+export const locationUpdateInput = z.object({ ...locationFields, name: locationFields.name.optional(), isActive: z.boolean().optional() });
+
+export const locationHoursInput = z.object({
+  /** One entry per open weekday (0 = Sunday). Days left out are closed. An empty list removes the hours restriction. */
+  days: z.array(z.object({ weekday: z.number().int().min(0).max(6), opensAt: timeOfDay, closesAt: timeOfDay })).max(7),
+}).superRefine((v, ctx) => {
+  const seen = new Set<number>();
+  v.days.forEach((d, i) => {
+    if (seen.has(d.weekday)) ctx.addIssue({ code: "custom", path: ["days", i, "weekday"], message: "Each day can only be listed once" });
+    seen.add(d.weekday);
+    if (d.closesAt <= d.opensAt) ctx.addIssue({ code: "custom", path: ["days", i, "closesAt"], message: "Closing time must be after opening time" });
+  });
+});
+
+export const locationClosureInput = z.object({
+  closedOn: isoDate,
+  reason: optionalText(200),
+});

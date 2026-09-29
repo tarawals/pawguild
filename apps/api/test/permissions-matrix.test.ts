@@ -35,7 +35,7 @@ beforeAll(async () => {
 });
 afterAll(async () => { await ctx.close(); });
 
-type Probe = { name: string; method: "GET" | "POST" | "PATCH" | "PUT"; url: () => string; body?: unknown; allowed: (role: Role) => boolean };
+type Probe = { name: string; method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; url: () => string; body?: unknown; allowed: (role: Role) => boolean };
 const needs = (p: Permission) => (role: Role) => hasPermission(role, p);
 const anyone = () => true;
 
@@ -89,6 +89,11 @@ const probes: Probe[] = [
   { name: "sales report", method: "GET", url: () => "/api/reports/sales?from=2026-01-01&to=2026-01-31", allowed: needs("reports:read") },
   { name: "payments report", method: "GET", url: () => "/api/reports/payments", allowed: needs("reports:read") },
   { name: "balances report", method: "GET", url: () => "/api/reports/balances", allowed: needs("reports:read") },
+  { name: "add location", method: "POST", url: () => "/api/locations", body: {}, allowed: needs("locations:manage") },
+  { name: "edit location", method: "PATCH", url: () => `/api/locations/${ids.location}`, body: { name: "" }, allowed: needs("locations:manage") },
+  { name: "set business hours", method: "PUT", url: () => `/api/locations/${ids.location}/hours`, body: {}, allowed: needs("locations:manage") },
+  { name: "add closure", method: "POST", url: () => `/api/locations/${ids.location}/closures`, body: {}, allowed: needs("locations:manage") },
+  { name: "remove closure", method: "DELETE", url: () => `/api/locations/${ids.location}/closures/00000000-0000-4000-8000-000000000000`, allowed: needs("locations:manage") },
   { name: "occupancy report", method: "GET", url: () => "/api/reports/occupancy?from=2026-01-01&to=2026-01-07", allowed: needs("reports:read") },
 ];
 
@@ -99,7 +104,8 @@ describe("permission matrix", () => {
       for (const p of probes) {
         const c = clients[role];
         const res = p.method === "GET" ? await c.get(p.url()) : p.method === "POST" ? await c.post(p.url(), p.body ?? {})
-          : p.method === "PATCH" ? await c.patch(p.url(), p.body ?? {}) : await c.put(p.url(), p.body ?? {});
+          : p.method === "PATCH" ? await c.patch(p.url(), p.body ?? {}) : p.method === "DELETE" ? await c.delete(p.url())
+          : await c.put(p.url(), p.body ?? {});
         if (res.statusCode >= 500) mismatches.push(`${p.name}: server error ${res.statusCode} ${res.body.slice(0, 120)}`);
         const denied = res.statusCode === 403;
         if (denied === p.allowed(role)) mismatches.push(`${p.name}: expected ${p.allowed(role) ? "allowed" : "403"}, got ${res.statusCode}`);

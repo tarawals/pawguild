@@ -10,6 +10,7 @@ import type { AuthContext } from "../lib/auth-context";
 import { diff, recordAudit } from "../lib/audit";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors";
 import { capacityShortfalls, type PeriodOccupancy } from "../lib/capacity";
+import { enforceHours } from "../lib/hours";
 import { idParam } from "../lib/params";
 import { describeProblems, reservationVaccinationChecks } from "../lib/vaccinations";
 
@@ -186,6 +187,10 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
         locationId: location.id, serviceCategory: service.category, startsAt, endsAt,
         petCount: input.petIds.length, override: input.overrideCapacity,
       });
+      const hoursOverride = await enforceHours(trx, req.auth, {
+        locationId: location.id, override: input.overrideHours,
+        moments: [{ what: "Drop-off", at: startsAt }, { what: "Pick-up", at: endsAt }],
+      });
 
       const now = new Date();
       const row = await trx.insertInto("reservations").values({
@@ -201,6 +206,7 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
         changes: {
           status: input.status, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), petIds: input.petIds,
           ...(overridden && { capacityOverride: overridden }),
+          ...(hoursOverride && { hoursOverride }),
         } });
       return loadReservation(trx, row.id, await orgTimezone(trx, req.auth.orgId));
     });
@@ -227,6 +233,15 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
         locationId: before.locationId, serviceCategory: service.category, startsAt, endsAt,
         petCount: petIds.length, override: input.overrideCapacity, excludeReservationId: id,
       });
+      // Only a moved drop-off or pick-up is checked, so notes or pets can still be edited on a
+      // booking made before the hours were set.
+      const hoursOverride = await enforceHours(trx, req.auth, {
+        locationId: before.locationId, override: input.overrideHours,
+        moments: [
+          ...(startsAt.getTime() !== before.startsAt.getTime() ? [{ what: "Drop-off" as const, at: startsAt }] : []),
+          ...(endsAt.getTime() !== before.endsAt.getTime() ? [{ what: "Pick-up" as const, at: endsAt }] : []),
+        ],
+      });
 
       const after = await trx.updateTable("reservations")
         .set({ startsAt, endsAt, ...(input.notes !== undefined && { notes: input.notes }) })
@@ -244,6 +259,7 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
         if (removed.length || added.length) changes.pets = { removed, added };
       }
       if (overridden && Object.keys(changes).length > 0) changes.capacityOverride = overridden;
+      if (hoursOverride && Object.keys(changes).length > 0) changes.hoursOverride = hoursOverride;
       if (Object.keys(changes).length > 0) {
         await recordAudit(trx, req.auth, { action: "reservation.updated", entityType: "reservation", entityId: id, changes });
       }
