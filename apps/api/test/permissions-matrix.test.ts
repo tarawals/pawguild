@@ -64,6 +64,7 @@ const probes: Probe[] = [
   { name: "create kennel", method: "POST", url: () => "/api/resources", body: {}, allowed: needs("resources:manage") },
   { name: "set capacity", method: "PUT", url: () => `/api/locations/${ids.location}/capacity`, body: {}, allowed: needs("locations:manage") },
   { name: "set tax rate", method: "PUT", url: () => `/api/locations/${ids.location}/tax-rate`, body: {}, allowed: needs("locations:manage") },
+  { name: "check-out summary", method: "GET", url: () => `/api/reservations/${ids.reservation}/checkout-summary`, allowed: needs("reservations:read") },
   { name: "today's care", method: "GET", url: () => "/api/care/today", allowed: needs("reservations:read") },
   { name: "log care", method: "POST", url: () => `/api/reservations/${ids.reservation}/care-logs`, body: {}, allowed: needs("care:record") },
   { name: "void care entry", method: "POST", url: () => `/api/care-logs/${ids.careLog}/void`, body: {}, allowed: needs("care:record") },

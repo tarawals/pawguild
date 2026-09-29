@@ -6,6 +6,7 @@ import { recordAudit } from "../lib/audit";
 import { todaysDoses } from "../lib/care";
 import { AppError, fieldError, notFound } from "../lib/errors";
 import { idParam } from "../lib/params";
+import { customerCredit, loadInvoice } from "./billing";
 import { listMedications } from "./medications";
 
 const FUTURE_TOLERANCE_MS = 5 * 60_000;
@@ -145,6 +146,71 @@ export const careRoutes: FastifyPluginAsync = async (app) => {
       await recordAudit(trx, req.auth, { action: "care.entry_voided", entityType: "reservation", entityId: row.reservationId,
         changes: { careLogId: id, kind: row.kind, petId: row.petId, reason } });
       return { ok: true };
+    });
+  });
+
+  /**
+   * Everything the front desk should review before handing a pet back: care over the stay,
+   * medication doses not recorded today, open incidents, and the bill.
+   */
+  app.get("/reservations/:id/checkout-summary", { preHandler: app.authorize("reservations:read") }, async (req) => {
+    const id = idParam(req.params, "Reservation");
+    return withTenant(app.db, req.auth, async (trx) => {
+      const r = await trx.selectFrom("reservations").select(["id", "status", "customerId"]).where("id", "=", id).executeTakeFirst();
+      if (!r) throw notFound("Reservation");
+      const [pets, logs, doses, incidents] = await Promise.all([
+        trx.selectFrom("reservationPets as rp").innerJoin("pets as p", "p.id", "rp.petId").select(["p.id", "p.name"])
+          .where("rp.reservationId", "=", id).orderBy("p.name").execute(),
+        careLogsFor(trx, id),
+        r.status === "checked_in" ? todaysDoses(trx, { reservationIds: [id] }) : Promise.resolve([]),
+        trx.selectFrom("incidents").select(["id", "petId", "category", "severity", "ownerNotified", "resolvedAt", "occurredAt"])
+          .where("reservationId", "=", id).orderBy("occurredAt").execute(),
+      ]);
+      const active = logs.filter((l) => !l.voidedAt);
+      const petSummaries = pets.map((p) => {
+        const mine = active.filter((l) => l.petId === p.id);
+        const count = (kind: string) => mine.filter((l) => l.kind === kind).length;
+        const feedings = mine.filter((l) => l.kind === "feeding");
+        return {
+          petId: p.id,
+          petName: p.name,
+          counts: { feeding: feedings.length, medication: count("medication"), potty: count("potty"), walk: count("walk"), play: count("play"), rest: count("rest") },
+          mealsNotFinished: feedings.filter((f) => f.amountEaten === "some" || f.amountEaten === "none").length,
+          medicationsGiven: mine.filter((l) => l.kind === "medication").map((l) => ({
+            name: l.medicationName, dose: l.dose, status: l.medicationStatus, at: l.occurredAt,
+          })),
+          notes: mine.filter((l) => l.kind === "note" && l.notes).map((l) => ({ text: l.notes, at: l.occurredAt, by: l.recordedBy })),
+          // Doses scheduled today that haven't been recorded (only while checked in).
+          dosesNotRecorded: doses.filter((d) => d.petId === p.id && (d.status === "due" || d.status === "overdue"))
+            .map((d) => ({ medicationName: d.medicationName, scheduledFor: d.scheduledFor, status: d.status })),
+          incidents: incidents.filter((i) => i.petId === p.id),
+        };
+      });
+
+      let billing = null;
+      if (req.auth.permissions.has("billing:read")) {
+        const inv = await trx.selectFrom("invoices").select("id").where("reservationId", "=", id).where("status", "<>", "void").executeTakeFirst();
+        const loaded = inv ? await loadInvoice(trx, inv.id) : null;
+        billing = {
+          invoice: loaded && { id: loaded.id, status: loaded.status, number: loaded.number, totalCents: loaded.totals.totalCents,
+            balanceCents: loaded.balanceCents, paymentStatus: loaded.paymentStatus },
+          customerCreditCents: await customerCredit(trx, r.customerId),
+        };
+      }
+
+      const warnings: string[] = [];
+      for (const p of petSummaries) {
+        if (p.dosesNotRecorded.length) warnings.push(`${p.petName}: ${p.dosesNotRecorded.length} medication dose${p.dosesNotRecorded.length === 1 ? "" : "s"} today not recorded`);
+        const open = p.incidents.filter((i) => !i.resolvedAt);
+        if (open.some((i) => !i.ownerNotified)) warnings.push(`${p.petName}: incident not yet shared with the owner`);
+        else if (open.length) warnings.push(`${p.petName}: ${open.length} open incident${open.length === 1 ? "" : "s"}`);
+      }
+      if (billing) {
+        if (!billing.invoice) warnings.push("No invoice yet");
+        else if (billing.invoice.status === "draft") warnings.push("Invoice is still a draft");
+        else if (billing.invoice.balanceCents > 0) warnings.push("Invoice not fully paid");
+      }
+      return { status: r.status, pets: petSummaries, billing, warnings };
     });
   });
 };
