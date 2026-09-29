@@ -18,6 +18,8 @@ export function useStatusChange(reservationId: string) {
       qc.invalidateQueries({ queryKey: ["reservations"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["audit"] });
+      qc.invalidateQueries({ queryKey: ["checkout", reservationId] });
+      qc.invalidateQueries({ queryKey: ["care"] });
     },
   });
 }
