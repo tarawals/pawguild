@@ -133,7 +133,13 @@ Balance: issued invoice totals minus non-voided payments (`customerBalance` in `
 - All three tables are INSERT-only for the application role. Corrections are new entries.
 - Payments on an invoice that has refunds can't be voided (credit notes and refunds are used instead).
 
-Tables without RLS: `users` and `sessions`. They are identity data that login needs before a
+## 0008_login_attempts
+
+| Table | Purpose | Notes |
+|---|---|---|
+| `login_attempts` | Sign-in throttling | email (lowercased), ip, succeeded, attempted_at; no RLS (happens before an organization is known); pruned after one day |
+
+Tables without RLS: `users`, `sessions` and `login_attempts`. They are identity data that login needs before a
 tenant is known, and the app only reaches them by id, email or token hash.
 `organizations` and `memberships` have RLS that also lets a user see their own memberships.
 

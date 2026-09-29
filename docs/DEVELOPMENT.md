@@ -39,6 +39,9 @@ Run `npm run dev:api` and `npm run dev:web` in two terminals, then open http://1
 | `COOKIE_SECURE` | no (`false`) | Set `true` whenever served over HTTPS |
 | `NODE_ENV` | no | `development`, `test` or `production`. Seeding refuses to run in production. |
 | `SEED_PASSWORD` | seed only | Password for the demo staff users |
+| `LOGIN_MAX_FAILURES_PER_EMAIL` | no (`5`) | Failed sign-ins allowed per email within the window before it's locked |
+| `LOGIN_MAX_FAILURES_PER_IP` | no (`50`) | Failed sign-ins allowed per network address (staff often share one address) |
+| `LOGIN_WINDOW_MINUTES` | no (`15`) | Sliding window for the limits above |
 
 Web (`apps/web`): `API_PROXY_TARGET` (dev server proxy target; default `http://127.0.0.1:3001`).
 
@@ -56,6 +59,10 @@ Never commit `.env` files or real credentials. `.gitignore` excludes them.
 Test database URLs can be overridden with `TEST_DATABASE_URL`, `TEST_MIGRATION_DATABASE_URL`,
 `E2E_DATABASE_URL` and `E2E_MIGRATION_DATABASE_URL`. The setup scripts refuse to wipe a
 database whose name doesn't end in `_test` or `_e2e`.
+
+Browser tests run in the demo business's time zone (`America/New_York`, set in `playwright.config.ts`),
+the same way staff computers are set up. Tests that depend on "today" also pin their time zone, so
+they pass at any hour.
 
 If Playwright's own browser build is unavailable, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to a local
 Chromium binary.

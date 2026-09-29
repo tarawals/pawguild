@@ -13,6 +13,9 @@ export default defineConfig({
   retries: 0,
   use: {
     baseURL: "http://127.0.0.1:5174",
+    // Staff computers run in the business's time zone (the demo business is in New York). Without
+    // this, tests near midnight disagree with the business about what "today" is.
+    timezoneId: "America/New_York",
     trace: "retain-on-failure",
     // Optional: point at a preinstalled Chromium instead of Playwright's downloaded build.
     ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE && {

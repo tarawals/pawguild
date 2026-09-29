@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-09-25 (session 7: billing part 2)_
+_Last updated: 2026-09-29 (session 8: test hardening and sign-in throttling)_
 
 ## Built and tested
 
@@ -25,6 +25,8 @@ _Last updated: 2026-09-25 (session 7: billing part 2)_
 | **Payments and balances** (can't exceed the balance; managers void mistakes; customer balance; dashboard outstanding) | ✅ | ✅ | `billing:write`; void `billing:refund` | Record payment on invoice | integration + e2e |
 | **Credit notes and refunds** (managers; reason required; refund to card/cash/check/other or to account credit; never more than overpaid) | ✅ + DB triggers | ✅ | `billing:refund` | Credits and refunds panel on invoices; Overpaid filter | unit + integration + e2e |
 | **Account credit and deposits** (deposit on a reservation or prepayment; apply to invoices; refund credit; never negative) | ✅ + DB trigger | ✅ | take/apply: `billing:write`; refund: `billing:refund` | Account credit panel on customers; Take deposit on reservations; Apply credit on invoices | integration + e2e |
+| **Sign-in throttling** (per email and per network address; same response for unknown emails) | ✅ | ✅ | — | Server message on sign-in page | integration |
+| **Session-ended handling** (back to sign-in with notice, then return to the same page; same-site redirects only) | — | — | — | ✅ | e2e |
 | Dashboard (outstanding balances and overpaid invoices, medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
 | Audit log (append-only, field diffs) | ✅ | read endpoint | `audit:read` | history panels (customer, pet, reservation) | integration |
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
@@ -49,9 +51,17 @@ against an upgraded copy of the previous version's database also passed, with no
 7. Reports, internal notifications, business settings UI
 8. Recurring reservations, waitlists, pet photos
 
+## Test coverage beyond feature tests
+
+- `auth-hardening.test.ts`: sign-in for every role, identical errors, cookie flags, expiry, revocation, tampering, deactivation, immediate role changes, injection attempts
+- `throttle.test.ts`: lockout per email and per address, reset on success, window expiry, no enumeration
+- `permissions-matrix.test.ts`: all 10 roles × 37 protected actions against the role map, and no action returns 500
+- `money-invariants.test.ts`: 40 randomized billing scenarios × 15 operations that must reconcile after every step, plus simultaneous-request races (payments, credit, refunds, invoice numbers, last capacity space, same pet)
+- `edge-cases.test.ts`: empty updates, markup/unicode, oversized input, unknown ids
+- Browser: `login.spec.ts` (every role, deep links, sign-out, session ending mid-use, safe redirects) and `full-day.spec.ts` (a full visit across three staff members)
+
 ## Known issues / risks
 
-- **No login rate limiting or lockout yet.** Add before any internet-facing deployment.
 - The double-booking rule is enforced in the API with row locks, not by a database constraint.
   A future migration could add an exclusion constraint (`btree_gist`).
 - Capacity and kennel rules are enforced in the API under row locks, not by database constraints.

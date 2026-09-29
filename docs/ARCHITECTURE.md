@@ -59,6 +59,13 @@ See [ADR 0002](adr/0002-tenant-isolation.md). In short:
 - Passwords are hashed with scrypt (N=2^15, r=8, p=1, 16-byte salt) using Node's built-in crypto.
 - Login returns the same error for an unknown email and a wrong password, and runs a dummy hash for unknown emails to keep timing uniform.
 - Sessions live server-side (so they can be revoked) and expire after `SESSION_TTL_HOURS`.
+- **Sign-in throttling** (`auth/throttle.ts`, table `login_attempts`):
+  - 5 failures per email or 50 per network address in 15 minutes returns 429 with `Retry-After`.
+  - The check runs before the password is verified, and unknown emails are counted the same way.
+  - A successful sign-in resets that email's count.
+  - In production, `trustProxy` must be set correctly, or every user appears to share the proxy's address.
+- When any request finds the session has ended, the web app sends the user to sign-in with a
+  notice and returns them to the same page. Post-sign-in redirects only follow same-site paths.
 - Users with memberships in several organizations currently sign in to the oldest active
   membership. An organization switcher is future work.
 
