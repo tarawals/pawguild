@@ -32,9 +32,8 @@ _Last updated: 2026-09-29 (session 8: test hardening and sign-in throttling)_
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results: typecheck ✅, 36 shared unit tests ✅, 76 API integration tests ✅,
-4 web tests ✅, 17 Playwright e2e tests ✅. An exploratory browser QA pass (8 credit and refund scenarios)
-against an upgraded copy of the previous version's database also passed, with no console errors.
+Latest check results (2026-09-29): typecheck ✅, 36 shared unit tests ✅, 118 API integration tests ✅,
+4 web tests ✅, 27 Playwright e2e tests ✅, including a run between 11pm and midnight in the business's time zone.
 
 ## Not built yet (in scope, by priority)
 
