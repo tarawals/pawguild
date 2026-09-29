@@ -1,12 +1,14 @@
 # Development status
 
-_Last updated: 2026-09-29 (session 11: reports)_
+_Last updated: 2026-09-29 (session 12: locations admin, business hours and closures)_
 
 ## Built and tested
 
 | Area | Data model | API | Authz | UI | Tests |
 |---|---|---|---|---|---|
-| Organizations, locations, hours, closures | ✅ | locations: read-only list | — | — | — |
+| Organizations | ✅ | — | — | — | — |
+| **Locations admin** (add/edit details and time zone; deactivate only with no upcoming stays and never the last one; reactivate) | ✅ | ✅ | `locations:manage` (general manager and above) | Locations page with a location switcher | integration + e2e |
+| **Business hours and closures** (weekly hours per location; closure dates with reason; drop-off and pick-up checked at booking and reschedule; manager override, audited; the booking form shows hours and warns early) | ✅ | ✅ | `locations:manage` to set; `reservations:override_hours` to book outside them | Business hours and Closures panels; booking form hint, warning and override | unit + integration + e2e |
 | Staff users, memberships (roles), sessions | ✅ | login, logout, me | ✅ | sign-in | integration + e2e |
 | Role-based permissions (10 roles) | shared map | enforced per route | ✅ | controls hidden | unit + integration |
 | Customers (CRUD, search, archive/restore) | ✅ | ✅ | ✅ | list, detail, form | integration + e2e + component |
@@ -35,23 +37,22 @@ _Last updated: 2026-09-29 (session 11: reports)_
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results (2026-09-29): typecheck ✅, 38 shared unit tests ✅, 138 API integration tests ✅,
-7 web tests ✅, 34 Playwright e2e tests ✅.
+Latest check results (2026-09-29): typecheck ✅, 46 shared unit tests ✅, 148 API integration tests ✅,
+7 web tests ✅, 36 Playwright e2e tests ✅. (`reservations.spec.ts` failed once in a full run and couldn't be
+reproduced in three later full runs or alone; the error detail wasn't kept. Watch for it.)
 
 ## Not built yet (in scope, by priority)
 
-1. **Locations admin**: add/edit locations, business hours and closures, enforced at booking
-   (the tables exist; bookings don't check them yet)
-2. **Grooming**: groomer assignment and a timed schedule view (grooming can already be booked as a per-visit service)
-3. Staff scheduling
-4. More reports (e.g. tax by rate, staff activity), internal notifications, business settings UI
-5. Recurring reservations, waitlists, pet photos
+1. **Grooming**: groomer assignment and a timed schedule view (grooming can already be booked as a per-visit service)
+2. Staff scheduling
+3. More reports (e.g. tax by rate, staff activity), internal notifications, business settings UI
+4. Recurring reservations, waitlists, pet photos
 
 ## Test coverage beyond feature tests
 
 - `auth-hardening.test.ts`: sign-in for every role, identical errors, cookie flags, expiry, revocation, tampering, deactivation, immediate role changes, injection attempts
 - `throttle.test.ts`: lockout per email and per address, reset on success, window expiry, no enumeration
-- `permissions-matrix.test.ts`: all 10 roles × 41 protected actions against the role map, and no action returns 500
+- `permissions-matrix.test.ts`: all 10 roles × 46 protected actions against the role map, and no action returns 500
 - `money-invariants.test.ts`: 40 randomized billing scenarios × 15 operations that must reconcile after every step, plus simultaneous-request races (payments, credit, refunds, invoice numbers, last capacity space, same pet)
 - `edge-cases.test.ts`: empty updates, markup/unicode, oversized input, unknown ids
 - Browser: `login.spec.ts` (every role, deep links, sign-out, session ending mid-use, safe redirects) and `full-day.spec.ts` (a full visit across three staff members)
@@ -91,10 +92,17 @@ Latest check results (2026-09-29): typecheck ✅, 38 shared unit tests ✅, 138 
 - The `users` table has no RLS. Any future user listing must join through `memberships`.
 - The permission map is code-defined.
 - There is no production deployment configuration and no CI.
+- Business hours are checked only when a booking is made or its times move. Adding a closure or
+  changing hours doesn't change existing bookings; adding a closure reports how many bookings drop
+  off or pick up that day so staff can contact those customers.
+- Hours are one open–close range per day (no lunch break or split shifts), and there are no
+  separate drop-off and pick-up windows.
+- Location access isn't limited by staff location assignments yet: anyone with the permission sees
+  and manages every location in the organization.
 
 ## Next recommended step
 
-**Locations admin (business hours and closures):** let managers edit locations (name, address,
-time zone, tax rate), set weekly business hours and closure dates, and enforce them at booking.
-Drop-off and pick-up outside hours or on a closed day should be refused, with a manager override
-(audited) as for capacity. Tests should cover time-zone boundaries and the override.
+**Grooming schedule:** assign a groomer to grooming appointments and add a day view by groomer and
+grooming station. Double-booking a groomer or a station should be prevented, and appointments
+should fit within business hours. The booking form would suggest open slots from the service's
+duration. Tests should cover overlap races (as for pets) and time-zone boundaries.

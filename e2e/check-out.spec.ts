@@ -18,9 +18,9 @@ async function api(page: Page, method: "GET" | "POST", url: string, data?: unkno
 }
 
 test("check-out review: warnings, bill and check-out in one place", async ({ page }) => {
-  await signIn(page, "desk@harborhounds.example");
-
-  // Set up a stay that's due to leave (pick-up a minute ago, so it's a departure at any hour).
+  // A manager sets up a stay that's due to leave (pick-up a minute ago, so it's a departure at
+  // any hour; at night that's outside business hours, hence the override).
+  await signIn(page, "owner@harborhounds.example");
   const locations = await api(page, "GET", "/api/locations");
   const services = await api(page, "GET", "/api/services");
   const boarding = services.items.find((s: { name: string }) => s.name === "Boarding — Standard Suite");
@@ -33,13 +33,17 @@ test("check-out review: warnings, bill and check-out in one place", async ({ pag
   const r = await api(page, "POST", "/api/reservations", {
     customerId: customer.id, locationId: locations.items[0].id, serviceId: boarding.id, petIds: [pet.id],
     startsAt: new Date(now - 3 * 3600_000).toISOString(), endsAt: new Date(now - 60_000).toISOString(), status: "confirmed",
+    overrideHours: true,
   });
   await api(page, "POST", `/api/reservations/${r.id}/status`, { status: "checked_in" });
   await api(page, "POST", `/api/reservations/${r.id}/care-logs`, { kind: "feeding", petId: pet.id, meal: "lunch", amountEaten: "some" });
   await api(page, "POST", `/api/reservations/${r.id}/care-logs`, { kind: "note", petId: pet.id, notes: "Purred all afternoon" });
   await api(page, "POST", "/api/incidents", { petId: pet.id, reservationId: r.id, category: "illness", severity: "low", description: "Sneezed a few times" });
 
-  // Dashboard "Check out" opens the review rather than checking out blind.
+  // Front desk takes it from here. Dashboard "Check out" opens the review rather than checking out blind.
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await signIn(page, "desk@harborhounds.example");
   await page.goto("/");
   await page.getByRole("region", { name: "Departures today" }).getByRole("link", { name: "Check out Nova" }).click();
   const panel = page.getByRole("region", { name: "Check-out" });
@@ -47,7 +51,7 @@ test("check-out review: warnings, bill and check-out in one place", async ({ pag
   await expect(warnings).toContainText("Nova: incident not yet shared with the owner");
   await expect(warnings).toContainText("No invoice yet");
   await expect(panel).toContainText("Fed 1 time (1 not finished)");
-  await expect(panel).toContainText("“Purred all afternoon” — Sam Patel");
+  await expect(panel).toContainText("“Purred all afternoon” — Jordan Reyes");
   await expect(panel).toContainText("(owner not told yet)");
 
   // Bill from the panel.

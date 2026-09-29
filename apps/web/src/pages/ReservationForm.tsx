@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { estimateReservation, formatMoney, PRICE_UNIT_LABELS, type PriceUnit } from "@pawguild/shared";
+import { describeHoursProblem, estimateReservation, formatMoney, hoursProblem, PRICE_UNIT_LABELS, summarizeHours, type PriceUnit } from "@pawguild/shared";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
@@ -7,7 +7,7 @@ import {
 } from "../api";
 import { useCan, useMe } from "../auth";
 import { Checkbox, ErrorAlert, fieldErrors, Loading, PageHeader, Panel, SelectField, TextArea, TextField } from "../components/ui";
-import { fromLocalInput, toLocalInput } from "../units";
+import { formatDate, fromLocalInput, toLocalInput } from "../units";
 
 /** Sensible default times for a new booking, by service category. */
 function defaultTimes(service: Service | undefined, day: Date): { start: string; end: string } {
@@ -74,6 +74,8 @@ export function ReservationFormPage() {
   const [confirmNow, setConfirmNow] = useState(true);
   const [overrideCapacity, setOverrideCapacity] = useState(false);
   const canOverride = useCan("reservations:override_capacity");
+  const [overrideHours, setOverrideHours] = useState(false);
+  const canOverrideHours = useCan("reservations:override_hours");
 
   const service = services.data?.items.find((s) => s.id === (editing ? existing.data?.service.id : serviceId));
   const activePets = useMemo(() => (customer.data?.pets ?? []).filter((p) => !p.archivedAt && p.status === "active"), [customer.data]);
@@ -108,9 +110,9 @@ export function ReservationFormPage() {
         ]);
       }
       return editing
-        ? patch<Reservation>(`/api/reservations/${id}`, { petIds, startsAt, endsAt, notes, overrideCapacity })
+        ? patch<Reservation>(`/api/reservations/${id}`, { petIds, startsAt, endsAt, notes, overrideCapacity, overrideHours })
         : post<Reservation>("/api/reservations", {
-            customerId, locationId, serviceId, petIds, startsAt, endsAt, notes, overrideCapacity,
+            customerId, locationId, serviceId, petIds, startsAt, endsAt, notes, overrideCapacity, overrideHours,
             status: confirmNow ? "confirmed" : "pending",
           });
     },
@@ -123,6 +125,19 @@ export function ReservationFormPage() {
   });
   const err = fieldErrors(save.error);
   const capacityFull = save.error instanceof ApiError && save.error.code === "capacity_full";
+  const outsideHours = save.error instanceof ApiError && save.error.code === "outside_hours";
+  const location = locations.data?.items.find((l) => l.id === (editing ? existing.data?.location.id : locationId));
+  const hoursWarnings = useMemo(() => {
+    if (!location) return [];
+    return ([["Drop-off", start, editing ? existing.data?.startsAt : undefined], ["Pick-up", end, editing ? existing.data?.endsAt : undefined]] as const)
+      .flatMap(([what, value, original]) => {
+        const iso = fromLocalInput(value);
+        // When editing, only a moved time is checked (same as the server).
+        if (!iso || (original && new Date(original).getTime() === new Date(iso).getTime())) return [];
+        const p = hoursProblem(new Date(iso), location.effectiveTimezone, location.hours, location.closures);
+        return p ? [describeHoursProblem(what, p)] : [];
+      });
+  }, [location, start, end, editing, existing.data]);
 
   if (!editing && !customerId) {
     return (
@@ -192,6 +207,15 @@ export function ReservationFormPage() {
             <TextField label="Drop-off" type="datetime-local" required value={start} onChange={(e) => setStart(e.target.value)} error={err("startsAt")} />
             <TextField label="Pick-up" type="datetime-local" required value={end} onChange={(e) => setEnd(e.target.value)} error={err("endsAt")} />
           </div>
+          {location && (location.hours.length > 0 || location.closures.length > 0) && (
+            <p className="muted" style={{ margin: "8px 0 0" }}>
+              {location.name}: {summarizeHours(location.hours)}
+              {location.closures.length > 0 && <> · Closed {location.closures.slice(0, 3).map((c) => formatDate(c.closedOn)).join(", ")}{location.closures.length > 3 && ", …"}</>}
+            </p>
+          )}
+          {hoursWarnings.length > 0 && !outsideHours && (
+            <div className="alert alert-warning" role="status" style={{ margin: "8px 0 0" }}>{hoursWarnings.join(". ")}.</div>
+          )}
         </fieldset>
         <TextArea label="Reservation notes" hint="Visible to staff." value={notes} onChange={(e) => setNotes(e.target.value)} error={err("notes")} />
         {estimate && (
@@ -203,6 +227,11 @@ export function ReservationFormPage() {
         {(capacityFull || overrideCapacity) && canOverride && (
           <div className="alert alert-warning">
             <Checkbox label="Book over capacity (manager override — recorded in history)" checked={overrideCapacity} onChange={(e) => setOverrideCapacity(e.target.checked)} />
+          </div>
+        )}
+        {(outsideHours || overrideHours) && canOverrideHours && (
+          <div className="alert alert-warning">
+            <Checkbox label="Book outside business hours (manager override — recorded in history)" checked={overrideHours} onChange={(e) => setOverrideHours(e.target.checked)} />
           </div>
         )}
         {!editing && <Checkbox label="Mark as confirmed" checked={confirmNow} onChange={(e) => setConfirmNow(e.target.checked)} />}

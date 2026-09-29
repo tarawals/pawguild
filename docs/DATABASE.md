@@ -144,6 +144,20 @@ Balance: issued invoice totals minus non-voided payments (`customerBalance` in `
 `users.must_change_password` (set for new staff and after a reset; cleared when the user sets their
 own password) and `users.password_changed_at`.
 
+## 0010_location_admin
+
+Grants `DELETE` on `location_hours` and `location_closures` to the app role. They are configuration,
+not business records: saving a week's hours replaces the rows, and a closure added by mistake can be
+removed. Every change is written to the audit log with the before and after values.
+
+Rules (enforced in the API, `apps/api/src/lib/hours.ts`, logic in `packages/shared/src/hours.ts`):
+- If a location has no `location_hours` rows, there is no hours restriction. Once any rows exist, a
+  weekday without a row is closed. Opening and closing times are both allowed.
+- Drop-off (`starts_at`) and pick-up (`ends_at`) are checked in the location's time zone (falling
+  back to the organization's). A stay may span a closed day.
+- A reschedule checks only the end that moved.
+- `reservations:override_hours` (managers and above) books anyway; the reasons go into the audit entry.
+
 Tables without RLS: `users`, `sessions` and `login_attempts`. They are identity data that login needs before a
 tenant is known, and the app only reaches them by id, email or token hash.
 `organizations` and `memberships` have RLS that also lets a user see their own memberships.

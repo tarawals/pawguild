@@ -103,8 +103,13 @@ export interface Service {
 }
 
 export interface Location {
-  id: string; name: string; timezone: string | null; isActive: boolean; taxRateBps: number;
+  id: string; name: string; timezone: string | null; effectiveTimezone: string; isActive: boolean; taxRateBps: number;
+  addressLine1: string | null; addressLine2: string | null; city: string | null; region: string | null; postalCode: string | null;
+  country: string | null; phone: string | null; email: string | null;
   capacity: { daycare: number | null; boarding: number | null };
+  hours: { weekday: number; opensAt: string; closesAt: string }[];
+  /** Upcoming closures (today onward). */
+  closures: { id: string; closedOn: string; reason: string | null }[];
 }
 
 export interface Resource {

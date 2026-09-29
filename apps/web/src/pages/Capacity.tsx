@@ -3,6 +3,8 @@ import { formatBps, parsePercentToBps, RESOURCE_KIND_LABELS, RESOURCE_KINDS, typ
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, get, patch, post, put, type Location, type Resource } from "../api";
 import { useCan } from "../auth";
+import { useSearchParams } from "react-router";
+import { ClosuresPanel, HoursForm, LocationDetails, LocationDetailsForm } from "../components/LocationAdmin";
 import { Checkbox, EmptyState, ErrorAlert, fieldErrors, Loading, PageHeader, Panel, SelectField, TextField } from "../components/ui";
 
 function parseLimit(value: string, path: string): number | null {
@@ -153,20 +155,45 @@ function Resources({ location }: { location: Location }) {
 }
 
 export function CapacityPage() {
-  const locations = useQuery({ queryKey: ["locations"], queryFn: () => get<{ items: Location[] }>("/api/locations") });
+  const canManage = useCan("locations:manage");
+  const [params, setParams] = useSearchParams();
+  const [adding, setAdding] = useState(false);
+  const locations = useQuery({ queryKey: ["locations", "all"], queryFn: () => get<{ items: Location[] }>("/api/locations?includeInactive=true") });
+  const items = locations.data?.items ?? [];
+  const selected = items.find((l) => l.id === params.get("location")) ?? items.find((l) => l.isActive) ?? items[0];
+  const select = (id: string) => setParams({ location: id }, { replace: true });
   return (
     <>
-      <PageHeader title="Locations" description="Capacity, sales tax and the kennels and rooms at each location." />
+      <PageHeader title="Locations" description="Details, business hours, closures, capacity, sales tax and kennels for each location."
+        actions={canManage && !adding && <button className="btn btn-primary" onClick={() => setAdding(true)}>Add location</button>} />
       <ErrorAlert error={locations.error} />
-      {locations.isPending ? <Loading /> : locations.data && (
+      {adding && (
+        <div style={{ marginBottom: 16 }}>
+          <Panel title="New location">
+            <LocationDetailsForm onDone={(saved) => { setAdding(false); if (saved) select(saved.id); }} />
+          </Panel>
+        </div>
+      )}
+      {locations.isPending ? <Loading /> : selected && (
         <div className="stack">
-          {locations.data.items.map((l) => (
-            <div key={l.id} className="stack">
-              <Panel title={`Capacity limits — ${l.name}`}><LimitsForm location={l} /></Panel>
-              <Panel title={`Sales tax — ${l.name}`}><TaxRateForm location={l} /></Panel>
-              <Resources location={l} />
+          {items.length > 1 && (
+            <div className="actions" role="group" aria-label="Location">
+              {items.map((l) => (
+                <button key={l.id} className={`btn ${l.id === selected.id ? "btn-primary" : ""}`} aria-pressed={l.id === selected.id} onClick={() => select(l.id)}>
+                  {l.name}{!l.isActive && " (inactive)"}
+                </button>
+              ))}
             </div>
-          ))}
+          )}
+          {/* Keyed so forms reset when switching locations. */}
+          <div key={selected.id} className="stack">
+            <Panel title={`Details — ${selected.name}`}><LocationDetails location={selected} /></Panel>
+            <Panel title={`Business hours — ${selected.name}`}><HoursForm location={selected} /></Panel>
+            <Panel title={`Closures — ${selected.name}`}><ClosuresPanel location={selected} /></Panel>
+            <Panel title={`Capacity limits — ${selected.name}`}><LimitsForm location={selected} /></Panel>
+            <Panel title={`Sales tax — ${selected.name}`}><TaxRateForm location={selected} /></Panel>
+            <Resources location={selected} />
+          </div>
         </div>
       )}
     </>

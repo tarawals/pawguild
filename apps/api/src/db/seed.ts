@@ -26,6 +26,14 @@ export async function seed(connectionString: string, password: string) {
         { organizationId: org.id, locationId: location.id, category: "daycare", maxPets: 40 },
         { organizationId: org.id, locationId: location.id, category: "boarding", maxPets: 12 },
       ]).execute();
+      // Open 7 AM–7 PM every day; closed on Christmas and New Year's Day.
+      await trx.insertInto("locationHours").values([0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
+        organizationId: org.id, locationId: location.id, weekday, opensAt: "07:00", closesAt: "19:00",
+      }))).execute();
+      await trx.insertInto("locationClosures").values([
+        { organizationId: org.id, locationId: location.id, closedOn: "2026-12-25", reason: "Christmas Day" },
+        { organizationId: org.id, locationId: location.id, closedOn: "2027-01-01", reason: "New Year's Day" },
+      ]).execute();
       const kennel = (name: string, kind: string, capacity = 1) => ({ organizationId: org.id, locationId: location.id, name, kind, capacity });
       await trx.insertInto("resources").values([
         ...Array.from({ length: 10 }, (_, i) => kennel(`Kennel ${i + 1}`, "kennel")),
