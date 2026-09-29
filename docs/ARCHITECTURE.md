@@ -64,6 +64,13 @@ See [ADR 0002](adr/0002-tenant-isolation.md). In short:
   - The check runs before the password is verified, and unknown emails are counted the same way.
   - A successful sign-in resets that email's count.
   - In production, `trustProxy` must be set correctly, or every user appears to share the proxy's address.
+- **Staff administration** (`routes/employees.ts`):
+  - Staff are created with a temporary password and `must_change_password`. Until it's changed,
+    `authorize()` refuses every route except `/api/auth/me`, `/api/auth/change-password` and `/api/auth/logout`.
+  - Seniority (`ROLE_RANK`, `canAssignRole`, `canManageStaffMember` in `packages/shared`): staff can only
+    manage people junior to them and only assign junior roles. Owners are the exception.
+  - Nobody can change their own role or deactivate themselves, and the last owner can't be removed.
+  - Deactivation and password resets revoke all of that user's sessions.
 - When any request finds the session has ended, the web app sends the user to sign-in with a
   notice and returns them to the same page. Post-sign-in redirects only follow same-site paths.
 - Users with memberships in several organizations currently sign in to the oldest active

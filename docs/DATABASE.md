@@ -139,6 +139,11 @@ Balance: issued invoice totals minus non-voided payments (`customerBalance` in `
 |---|---|---|
 | `login_attempts` | Sign-in throttling | email (lowercased), ip, succeeded, attempted_at; no RLS (happens before an organization is known); pruned after one day |
 
+## 0009_staff_admin
+
+`users.must_change_password` (set for new staff and after a reset; cleared when the user sets their
+own password) and `users.password_changed_at`.
+
 Tables without RLS: `users`, `sessions` and `login_attempts`. They are identity data that login needs before a
 tenant is known, and the app only reaches them by id, email or token hash.
 `organizations` and `memberships` have RLS that also lets a user see their own memberships.

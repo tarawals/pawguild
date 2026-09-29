@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-09-29 (session 9: check-out review)_
+_Last updated: 2026-09-29 (session 10: staff administration)_
 
 ## Built and tested
 
@@ -25,6 +25,7 @@ _Last updated: 2026-09-29 (session 9: check-out review)_
 | **Payments and balances** (can't exceed the balance; managers void mistakes; customer balance; dashboard outstanding) | ✅ | ✅ | `billing:write`; void `billing:refund` | Record payment on invoice | integration + e2e |
 | **Credit notes and refunds** (managers; reason required; refund to card/cash/check/other or to account credit; never more than overpaid) | ✅ + DB triggers | ✅ | `billing:refund` | Credits and refunds panel on invoices; Overpaid filter | unit + integration + e2e |
 | **Account credit and deposits** (deposit on a reservation or prepayment; apply to invoices; refund credit; never negative) | ✅ + DB trigger | ✅ | take/apply: `billing:write`; refund: `billing:refund` | Account credit panel on customers; Take deposit on reservations; Apply credit on invoices | integration + e2e |
+| **Staff administration** (add staff with a temporary password they must change; edit role, title, phone, locations; deactivate, which signs them out everywhere; reactivate; reset password, which also clears a lockout; seniority rules prevent escalation and self-lockout; change your own password) | ✅ | ✅ | `employees:read` to view; `employees:manage` + seniority to change | Staff page; Change password (sidebar); forced password screen | unit + integration + e2e |
 | **Check-out review** (per-pet care summary, doses not recorded today, incidents and whether the owner was told, invoice/payment status with create/pay shortcuts; warnings inform but don't block; dashboard "Check out" opens the review) | — | summary endpoint | `reservations:read`; bill only with `billing:read`; check-out needs `stays:check_in_out` | Check-out / Stay summary panel on reservations | integration + e2e |
 | **Sign-in throttling** (per email and per network address; same response for unknown emails) | ✅ | ✅ | — | Server message on sign-in page | integration |
 | **Session-ended handling** (back to sign-in with notice, then return to the same page; same-site redirects only) | — | — | — | ✅ | e2e |
@@ -94,10 +95,12 @@ Latest check results (2026-09-29): typecheck ✅, 36 shared unit tests ✅, 118 
 
 ## Next recommended step
 
-**Staff administration:** an Employees page for owners and managers to:
-- invite or add staff, and set their role and locations
-- deactivate staff (their sessions end immediately)
-- reset a password; staff can also change their own
+**Reports (first set):** a Reports page with:
+- revenue (issued invoices less credit notes) by service and by month
+- payments and refunds by method
+- outstanding and overpaid balances
+- occupancy by day
 
-This removes the need for a developer to manage accounts, and pairs with the sign-in lockout.
-After that: reports.
+Each report gets a date range and CSV download. All figures come from the existing tables, with no
+separate reporting store. Reconciliation tests should check that report totals equal the
+underlying invoice and payment totals.
