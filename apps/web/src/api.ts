@@ -54,7 +54,7 @@ export const del = <T,>(url: string) => api<T>("DELETE", url);
 // ---- Response types (mirror the API) --------------------------------------------------------
 
 export interface Me {
-  user: { id: string; email: string; firstName: string; lastName: string };
+  user: { id: string; email: string; firstName: string; lastName: string; mustChangePassword: boolean };
   organization: { id: string; name: string; timezone: string; currency: string };
   role: string;
   roleLabel: string;
@@ -230,4 +230,10 @@ export interface CreditEntry {
   id: string; amountCents: number; kind: "received" | "from_invoice" | "reversal" | "applied" | "refunded";
   method: string | null; reference: string | null; note: string | null; reservationId: string | null;
   invoiceId: string | null; invoiceNumber: number | null; createdAt: string; recordedBy: string;
+}
+
+export interface Employee {
+  id: string; userId: string; role: string; roleLabel: string; jobTitle: string | null; isActive: boolean; createdAt: string;
+  firstName: string; lastName: string; email: string; phone: string | null; lastLoginAt: string | null;
+  mustChangePassword: boolean; locationIds: string[]; canManage: boolean;
 }

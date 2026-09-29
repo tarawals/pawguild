@@ -4,6 +4,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router";
 import { ApiError, get, post, type Me } from "./api";
 import { Loading } from "./components/ui";
+import { ChangePasswordPage } from "./pages/ChangePassword";
 
 const MeContext = createContext<Me | null>(null);
 
@@ -36,6 +37,10 @@ export function RequireAuth({ children }: { children: ReactNode }) {
       return <Navigate to="/login" replace state={{ from: location.pathname }} />;
     }
     return <div className="content"><div role="alert" className="alert alert-error">{me.error.message}</div></div>;
+  }
+  // A temporary password must be replaced before anything else (the server enforces this too).
+  if (me.data.user.mustChangePassword) {
+    return <MeContext.Provider value={me.data}><ChangePasswordPage forced /></MeContext.Provider>;
   }
   return <MeContext.Provider value={me.data}>{children}</MeContext.Provider>;
 }
