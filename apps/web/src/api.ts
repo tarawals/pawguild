@@ -237,3 +237,29 @@ export interface Employee {
   firstName: string; lastName: string; email: string; phone: string | null; lastLoginAt: string | null;
   mustChangePassword: boolean; locationIds: string[]; canManage: boolean;
 }
+
+export interface SalesReport {
+  from: string; to: string; timeZone: string;
+  totals: { invoices: number; grossCents: number; discountCents: number; netCents: number; taxCents: number; invoicedCents: number;
+    creditNotesCents: number; creditNotes: number; salesAfterCreditsCents: number };
+  byService: { service: string; category: string | null; quantity: number; grossCents: number; discountCents: number; netCents: number }[];
+  byMonth: { month: string; invoices: number; netCents: number; taxCents: number; creditNotesCents: number }[];
+}
+type MethodTotal = { method: string; count: number; cents: number };
+export interface PaymentsReport {
+  from: string; to: string; timeZone: string;
+  payments: MethodTotal[]; refunds: MethodTotal[]; deposits: MethodTotal[];
+  totals: { paymentsCents: number; creditAppliedCents: number; depositsCents: number; refundsCents: number; movedToCreditCents: number; netCollectedCents: number };
+  byMethod: { method: string; inCents: number; outCents: number; netCents: number }[];
+}
+export interface BalancesReport {
+  asOf: string;
+  items: { customerId: string; customerName: string; owedCents: number; overpaidCents: number; creditCents: number; oldestUnpaid: string | null }[];
+  totals: { owedCents: number; overpaidCents: number; creditCents: number };
+}
+type OccupancySummary = { petDays: number; averagePerDay: number; peak: number; utilizationPercent: number | null; limit: number | null };
+export interface OccupancyReport {
+  from: string; to: string;
+  locations: { locationId: string; locationName: string; daycare: OccupancySummary; boarding: OccupancySummary;
+    days: { date: string; daycare: number; boarding: number; daycareLimit: number | null; boardingLimit: number | null }[] }[];
+}

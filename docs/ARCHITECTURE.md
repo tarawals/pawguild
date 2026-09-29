@@ -83,3 +83,20 @@ See [ADR 0002](adr/0002-tenant-isolation.md). In short:
 - `components/ui.tsx` holds the shared form, table and feedback primitives. Fields wire up `label`, `aria-invalid` and `aria-describedby` for hints and errors.
 - Styling is plain CSS with design tokens in `styles.css`, with no CSS framework.
 - Destructive actions (archive, void) ask for confirmation, and none of them delete data.
+
+## Reports
+
+Reports (`apps/api/src/routes/reports.ts`) are computed on request from the operational tables.
+There is no separate reporting store, so a report can never drift from the records it summarizes.
+Date ranges are inclusive, at most a year long, and grouped by the organization's local date.
+
+| Report | Counts | Leaves out |
+|---|---|---|
+| Sales | Issued invoices by issue date: gross, discounts, net, tax, total; credit notes by their own date on issued invoices | Drafts, void invoices |
+| Payments | Payments by received date, deposits by date taken, refunds by date, per method. Net collected = payments + deposits − refunds | Voided payments; account credit applied to invoices and overpayments moved to credit (listed, not counted as money) |
+| Balances | Per customer, as of now: owed, owed back (overpaid), account credit held | Customers who are settled |
+| Occupancy | Pets per day (daycare) and per night (boarding) per location, in the location's time zone | Cancelled and no-show stays |
+
+`apps/api/test/reports.test.ts` checks each report's totals against the invoices, payments and
+dashboard APIs. CSV files are built in the browser (`apps/web/src/csv.ts`). Text cells that begin
+like a spreadsheet formula are prefixed with `'` so opening an export can't run a formula.

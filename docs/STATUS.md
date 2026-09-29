@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-09-29 (session 10: staff administration)_
+_Last updated: 2026-09-29 (session 11: reports)_
 
 ## Built and tested
 
@@ -27,6 +27,7 @@ _Last updated: 2026-09-29 (session 10: staff administration)_
 | **Account credit and deposits** (deposit on a reservation or prepayment; apply to invoices; refund credit; never negative) | ✅ + DB trigger | ✅ | take/apply: `billing:write`; refund: `billing:refund` | Account credit panel on customers; Take deposit on reservations; Apply credit on invoices | integration + e2e |
 | **Staff administration** (add staff with a temporary password they must change; edit role, title, phone, locations; deactivate, which signs them out everywhere; reactivate; reset password, which also clears a lockout; seniority rules prevent escalation and self-lockout; change your own password) | ✅ | ✅ | `employees:read` to view; `employees:manage` + seniority to change | Staff page; Change password (sidebar); forced password screen | unit + integration + e2e |
 | **Check-out review** (per-pet care summary, doses not recorded today, incidents and whether the owner was told, invoice/payment status with create/pay shortcuts; warnings inform but don't block; dashboard "Check out" opens the review) | — | summary endpoint | `reservations:read`; bill only with `billing:read`; check-out needs `stays:check_in_out` | Check-out / Stay summary panel on reservations | integration + e2e |
+| **Reports** (sales by service and month with tax, discounts and credit notes; payments, deposits and refunds by method with net collected; customer balances owed, owed back and account credit; occupancy per day/night vs limits per location; date range with presets; CSV download) | — (derived from existing tables) | ✅ | `reports:read` (shift lead and above) | Reports page | integration (reconciled against invoices, payments, dashboard) + e2e + unit (CSV) |
 | **Sign-in throttling** (per email and per network address; same response for unknown emails) | ✅ | ✅ | — | Server message on sign-in page | integration |
 | **Session-ended handling** (back to sign-in with notice, then return to the same page; same-site redirects only) | — | — | — | ✅ | e2e |
 | Dashboard (outstanding balances and overpaid invoices, medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
@@ -34,29 +35,23 @@ _Last updated: 2026-09-29 (session 10: staff administration)_
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results (2026-09-29): typecheck ✅, 38 shared unit tests ✅, 131 API integration tests ✅,
-4 web tests ✅, 32 Playwright e2e tests ✅.
+Latest check results (2026-09-29): typecheck ✅, 38 shared unit tests ✅, 138 API integration tests ✅,
+7 web tests ✅, 34 Playwright e2e tests ✅.
 
 ## Not built yet (in scope, by priority)
 
-1. **Capacity and resources**: kennels, rooms, runs and grooming stations; availability;
-   capacity checks at booking time (location `daycare_capacity` exists but isn't enforced);
-   business hours and closure checks at booking
-2. **Check-in / check-out workflow**: the status buttons exist, but not the guided flow. Still
-   needed: vaccination verification at check-in, resource assignment, and a care and charges
-   review at check-out
-3. **Care records**: feeding, medication (strictly auditable), activities, incidents
-4. **Grooming**: groomer assignment and a timed schedule view (grooming can already be booked as a per-visit service)
-5. **Billing**: invoices from reservations, add-ons, tax, discounts, deposits, payments, refunds, credits, balances
-6. Employees and locations admin; staff scheduling
-7. Reports, internal notifications, business settings UI
-8. Recurring reservations, waitlists, pet photos
+1. **Locations admin**: add/edit locations, business hours and closures, enforced at booking
+   (the tables exist; bookings don't check them yet)
+2. **Grooming**: groomer assignment and a timed schedule view (grooming can already be booked as a per-visit service)
+3. Staff scheduling
+4. More reports (e.g. tax by rate, staff activity), internal notifications, business settings UI
+5. Recurring reservations, waitlists, pet photos
 
 ## Test coverage beyond feature tests
 
 - `auth-hardening.test.ts`: sign-in for every role, identical errors, cookie flags, expiry, revocation, tampering, deactivation, immediate role changes, injection attempts
 - `throttle.test.ts`: lockout per email and per address, reset on success, window expiry, no enumeration
-- `permissions-matrix.test.ts`: all 10 roles × 37 protected actions against the role map, and no action returns 500
+- `permissions-matrix.test.ts`: all 10 roles × 41 protected actions against the role map, and no action returns 500
 - `money-invariants.test.ts`: 40 randomized billing scenarios × 15 operations that must reconcile after every step, plus simultaneous-request races (payments, credit, refunds, invoice numbers, last capacity space, same pet)
 - `edge-cases.test.ts`: empty updates, markup/unicode, oversized input, unknown ids
 - Browser: `login.spec.ts` (every role, deep links, sign-out, session ending mid-use, safe redirects) and `full-day.spec.ts` (a full visit across three staff members)
@@ -70,7 +65,11 @@ Latest check results (2026-09-29): typecheck ✅, 38 shared unit tests ✅, 131 
   business's time zone. These match when staff computers are set to the business's time zone.
   Showing everything in the location's zone is future work.
 - Credit notes are a single amount that includes any tax. Tax isn't split out of a credit note,
-  so tax reports would need that split later.
+  so the sales report shows credit notes as one amount after tax rather than reducing the tax line.
+- Reports group by the organization's time zone. A location in a different time zone is still
+  grouped by the organization's dates in the sales and payments reports (occupancy uses the
+  location's zone). Occupancy compares against today's capacity limits, not the limits in force
+  on each past day.
 - Refunds and credit entries can't be voided (they're append-only). A mistaken refund has to be
   corrected with a new entry, such as taking a payment or credit again.
 - A deposit is held as general account credit for the customer. It's linked to its reservation for
@@ -95,12 +94,7 @@ Latest check results (2026-09-29): typecheck ✅, 38 shared unit tests ✅, 131 
 
 ## Next recommended step
 
-**Reports (first set):** a Reports page with:
-- revenue (issued invoices less credit notes) by service and by month
-- payments and refunds by method
-- outstanding and overpaid balances
-- occupancy by day
-
-Each report gets a date range and CSV download. All figures come from the existing tables, with no
-separate reporting store. Reconciliation tests should check that report totals equal the
-underlying invoice and payment totals.
+**Locations admin (business hours and closures):** let managers edit locations (name, address,
+time zone, tax rate), set weekly business hours and closure dates, and enforce them at booking.
+Drop-off and pick-up outside hours or on a closed day should be refused, with a manager override
+(audited) as for capacity. Tests should cover time-zone boundaries and the override.
