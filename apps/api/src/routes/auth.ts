@@ -2,6 +2,7 @@ import { loginInput, permissionsFor, isRole, ROLE_LABELS } from "@pawguild/share
 import type { FastifyPluginAsync } from "fastify";
 import { DUMMY_HASH_PROMISE, verifyPassword } from "../auth/password";
 import { createSession, revokeSession, SESSION_COOKIE } from "../auth/session";
+import { checkLoginThrottle, recordLoginAttempt } from "../auth/throttle";
 import { withTenant, withUser } from "../db";
 import { AppError } from "../lib/errors";
 
@@ -10,6 +11,16 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const { email, password } = loginInput.parse(req.body);
     const invalid = new AppError(401, "invalid_credentials", "That email and password don't match. Try again.");
 
+    // Throttle before checking the password, so a locked account can't be used to test guesses.
+    const throttle = await checkLoginThrottle(app.db, app.config, email, req.ip);
+    if (!throttle.allowed) {
+      req.log.warn({ reason: "login_throttled", ip: req.ip }, "login throttled");
+      const minutes = Math.ceil(throttle.retryAfterSeconds / 60);
+      reply.header("retry-after", String(throttle.retryAfterSeconds));
+      throw new AppError(429, "too_many_attempts",
+        `Too many sign-in attempts. For your security, please wait ${minutes} minute${minutes === 1 ? "" : "s"} and try again.`);
+    }
+
     const user = await app.db
       .selectFrom("users")
       .select(["id", "passwordHash", "isActive"])
@@ -17,9 +28,11 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       .executeTakeFirst();
     const ok = await verifyPassword(password, user?.passwordHash ?? (await DUMMY_HASH_PROMISE));
     if (!user || !ok || !user.isActive) {
+      await recordLoginAttempt(app.db, email, req.ip, false);
       req.log.warn({ reason: "invalid_credentials" }, "login failed");
       throw invalid;
     }
+    await recordLoginAttempt(app.db, email, req.ip, true);
 
     // Current phase: a user signs in to their first active organization.
     // TODO(multi-org): let users with several memberships choose an organization.

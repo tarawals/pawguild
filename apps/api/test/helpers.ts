@@ -19,12 +19,17 @@ export const config: Config = {
   SESSION_TTL_HOURS: 1,
   COOKIE_SECURE: false,
   WEB_ORIGIN: undefined,
+  LOGIN_MAX_FAILURES_PER_EMAIL: 5,
+  // Every API test signs in from the same address, so the per-address limit is relaxed here;
+  // throttle.test.ts exercises it with strict limits.
+  LOGIN_MAX_FAILURES_PER_IP: 100_000,
+  LOGIN_WINDOW_MINUTES: 15,
 };
 
-export async function setupTestApp() {
+export async function setupTestApp(overrides: Partial<Config> = {}) {
   const db = createDb(TEST_APP_URL);
   const ownerDb = createDb(TEST_OWNER_URL);
-  const app = await buildApp({ db, config });
+  const app = await buildApp({ db, config: { ...config, ...overrides } });
   return {
     app,
     ownerDb,

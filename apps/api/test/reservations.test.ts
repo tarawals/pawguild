@@ -169,6 +169,11 @@ describe("reservation tenant isolation", () => {
 
 describe("dashboard", () => {
   it("shows today's arrivals and pets checked in", async () => {
+    // Run in a fixed-offset zone where it's about noon, so a one-hour stay never crosses local
+    // midnight (this test previously failed between 11pm and midnight New York time).
+    const x = new Date().getUTCHours() - 12;
+    await ctx.ownerDb.updateTable("organizations").set({ timezone: `Etc/GMT${x >= 0 ? "+" : "-"}${Math.abs(x)}` })
+      .where("id", "=", org.orgId).execute();
     const pet = (await desk.post("/api/pets", { customerId: customer.id, name: "Dot", species: "dog" })).json();
     const now = new Date();
     const r = (await desk.post("/api/reservations", {

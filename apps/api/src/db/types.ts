@@ -389,6 +389,14 @@ export interface AccountCreditsTable {
   createdAt: CreatedAt;
 }
 
+export interface LoginAttemptsTable {
+  id: Generated<number>;
+  email: string;
+  ip: string;
+  succeeded: boolean;
+  attemptedAt: Generated<Date>;
+}
+
 export interface Database {
   organizations: OrganizationsTable;
   locations: LocationsTable;
@@ -416,6 +424,7 @@ export interface Database {
   invoiceCreditNotes: InvoiceCreditNotesTable;
   refunds: RefundsTable;
   accountCredits: AccountCreditsTable;
+  loginAttempts: LoginAttemptsTable;
 }
 
 export type Customer = Selectable<CustomersTable>;

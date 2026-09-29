@@ -19,6 +19,12 @@ const envSchema = z.object({
     .optional()
     .transform((v) => v === "true"),
   WEB_ORIGIN: z.string().optional(),
+  /** Sign-in throttling: failed attempts allowed per email / per network address within the window. */
+  LOGIN_MAX_FAILURES_PER_EMAIL: z.coerce.number().int().positive().default(5),
+  // Generous because a business's staff usually share one public address. Requires correct
+  // proxy settings in production (trustProxy) or every user would appear to share the proxy's address.
+  LOGIN_MAX_FAILURES_PER_IP: z.coerce.number().int().positive().default(50),
+  LOGIN_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
 });
 
 export type Config = z.infer<typeof envSchema>;
