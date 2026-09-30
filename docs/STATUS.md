@@ -40,7 +40,7 @@ _Last updated: 2026-09-30 (session 13: grooming schedule)_
 
 Latest check results (2026-09-30): typecheck ✅, 46 shared unit tests ✅, 157 API integration tests ✅,
 7 web tests ✅, 38 Playwright e2e tests ✅. (`reservations.spec.ts` failed once in an earlier full run and hasn't
-recurred in five full runs since; still watching.)
+recurred in four full runs since; still watching.)
 
 ## Not built yet (in scope, by priority)
 
