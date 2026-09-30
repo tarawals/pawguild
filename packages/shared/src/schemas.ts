@@ -431,3 +431,11 @@ export const copyWeekInput = z.object({
   fromWeekStart: isoDate,
   toWeekStart: isoDate,
 }).refine((r) => r.fromWeekStart !== r.toWeekStart, { message: "Choose a different week to copy to", path: ["toWeekStart"] });
+
+export const organizationSettingsInput = z.object({
+  name: z.string().trim().min(1, "Business name is required").max(120),
+  email: z.union([z.literal(""), z.email("Enter a valid email address").max(254)])
+    .transform((v) => (v === "" ? null : v.toLowerCase())).nullable().optional(),
+  phone: optionalText(40),
+  timezone: z.string().trim().refine(isValidTimeZone, "Choose a time zone from the list"),
+});

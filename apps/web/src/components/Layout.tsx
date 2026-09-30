@@ -10,6 +10,7 @@ export function Layout() {
   const canReadBilling = useCan("billing:read");
   const canReadStaff = useCan("employees:read");
   const canReadReports = useCan("reports:read");
+  const canManageSettings = useCan("settings:manage");
   return (
     <div className="shell">
       <a href="#main" className="skip-link">Skip to content</a>
@@ -37,6 +38,7 @@ export function Layout() {
               <NavLink to="/capacity">Locations</NavLink>
               {canReadReports && <NavLink to="/reports">Reports</NavLink>}
               {canReadStaff && <NavLink to="/staff">Staff</NavLink>}
+              {canManageSettings && <NavLink to="/settings">Business settings</NavLink>}
             </>
           )}
         </nav>
