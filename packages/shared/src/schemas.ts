@@ -133,6 +133,8 @@ export const reservationInput = z
     overrideCapacity: z.boolean().optional(),
     /** Book drop-off or pick-up outside business hours or on a closed day. Requires reservations:override_hours. */
     overrideHours: z.boolean().optional(),
+    /** Grooming appointments only: the staff member doing the grooming. */
+    groomerMembershipId: z.uuid().nullable().optional(),
   })
   .refine((r) => new Date(r.endsAt) > new Date(r.startsAt), {
     message: "End must be after the start", path: ["endsAt"],
@@ -149,6 +151,8 @@ export const reservationUpdateInput = z
     notes: optionalText(5000),
     overrideCapacity: z.boolean().optional(),
     overrideHours: z.boolean().optional(),
+    /** null unassigns the groomer. */
+    groomerMembershipId: z.uuid().nullable().optional(),
   });
 
 export const reservationStatusInput = z.object({
@@ -388,4 +392,9 @@ export const locationHoursInput = z.object({
 export const locationClosureInput = z.object({
   closedOn: isoDate,
   reason: optionalText(200),
+});
+
+export const groomingScheduleQuery = z.object({
+  date: isoDate,
+  locationId: z.uuid().optional(),
 });

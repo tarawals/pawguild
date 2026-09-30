@@ -10,7 +10,8 @@ import type { AuthContext } from "../lib/auth-context";
 import { diff, recordAudit } from "../lib/audit";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors";
 import { capacityShortfalls, type PeriodOccupancy } from "../lib/capacity";
-import { enforceHours } from "../lib/hours";
+import { checkGroomer } from "../lib/grooming";
+import { enforceHours, locationTimezone } from "../lib/hours";
 import { idParam } from "../lib/params";
 import { describeProblems, reservationVaccinationChecks } from "../lib/vaccinations";
 
@@ -63,10 +64,13 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     .innerJoin("customers as c", "c.id", "r.customerId")
     .innerJoin("services as s", "s.id", "r.serviceId")
     .innerJoin("locations as l", "l.id", "r.locationId")
+    .leftJoin("memberships as gm", "gm.id", "r.groomerMembershipId")
+    .leftJoin("users as gu", "gu.id", "gm.userId")
+    .select(sql<string | null>`gu.first_name || ' ' || gu.last_name`.as("groomerName"))
     .select([
       "r.id", "r.status", "r.startsAt", "r.endsAt", "r.unitPriceCents", "r.priceUnit", "r.notes",
       "r.confirmedAt", "r.checkedInAt", "r.checkedOutAt", "r.cancelledAt", "r.cancellationReason",
-      "r.createdAt", "r.updatedAt", "r.customerId", "r.serviceId", "r.locationId",
+      "r.createdAt", "r.updatedAt", "r.customerId", "r.serviceId", "r.locationId", "r.groomerMembershipId",
       "c.firstName", "c.lastName", "c.phone", "s.name as serviceName", "s.category as serviceCategory",
       "l.name as locationName", "l.timezone as locationTimezone",
     ])
@@ -81,13 +85,14 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     .where("reservationId", "=", id).where("status", "<>", "void").executeTakeFirst() ?? null;
   const deposits = await trx.selectFrom("accountCredits").select((eb) => eb.fn.sum<number>("amountCents").as("n"))
     .where("reservationId", "=", id).where("kind", "=", "received").executeTakeFirst();
-  const { firstName, lastName, phone, serviceName, serviceCategory, locationName, locationTimezone, ...rest } = r;
+  const { firstName, lastName, phone, serviceName, serviceCategory, locationName, locationTimezone, groomerName, groomerMembershipId, ...rest } = r;
   const status = r.status as ReservationStatus;
   return {
     ...rest,
     customer: { id: r.customerId, firstName, lastName, phone },
     service: { id: r.serviceId, name: serviceName, category: serviceCategory },
     location: { id: r.locationId, name: locationName },
+    groomer: groomerMembershipId ? { membershipId: groomerMembershipId, name: groomerName } : null,
     pets,
     vaccinationCheck,
     invoice,
@@ -191,12 +196,19 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
         locationId: location.id, override: input.overrideHours,
         moments: [{ what: "Drop-off", at: startsAt }, { what: "Pick-up", at: endsAt }],
       });
+      if (input.groomerMembershipId) {
+        if (service.category !== "grooming") throw invalid("A groomer can only be assigned to a grooming appointment.");
+        await checkGroomer(trx, {
+          orgId: req.auth.orgId, membershipId: input.groomerMembershipId, startsAt, endsAt,
+          timeZone: await locationTimezone(trx, location.id, req.auth.orgId),
+        });
+      }
 
       const now = new Date();
       const row = await trx.insertInto("reservations").values({
         organizationId: req.auth.orgId, customerId: customer.id, locationId: location.id, serviceId: service.id,
         status: input.status, startsAt, endsAt, notes: input.notes, unitPriceCents: service.priceCents,
-        priceUnit: service.priceUnit, createdByUserId: req.auth.userId,
+        priceUnit: service.priceUnit, createdByUserId: req.auth.userId, groomerMembershipId: input.groomerMembershipId ?? null,
         confirmedAt: input.status === "confirmed" ? now : null,
       }).returning("id").executeTakeFirstOrThrow();
       await trx.insertInto("reservationPets").values(input.petIds.map((petId) => ({
@@ -242,9 +254,18 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
           ...(endsAt.getTime() !== before.endsAt.getTime() ? [{ what: "Pick-up" as const, at: endsAt }] : []),
         ],
       });
+      const groomerId = input.groomerMembershipId !== undefined ? input.groomerMembershipId : before.groomerMembershipId;
+      const timesMoved = startsAt.getTime() !== before.startsAt.getTime() || endsAt.getTime() !== before.endsAt.getTime();
+      if (groomerId && (groomerId !== before.groomerMembershipId || timesMoved)) {
+        if (service.category !== "grooming") throw invalid("A groomer can only be assigned to a grooming appointment.");
+        await checkGroomer(trx, {
+          orgId: req.auth.orgId, membershipId: groomerId, startsAt, endsAt, excludeReservationId: id,
+          timeZone: await locationTimezone(trx, before.locationId, req.auth.orgId),
+        });
+      }
 
       const after = await trx.updateTable("reservations")
-        .set({ startsAt, endsAt, ...(input.notes !== undefined && { notes: input.notes }) })
+        .set({ startsAt, endsAt, groomerMembershipId: groomerId, ...(input.notes !== undefined && { notes: input.notes }) })
         .where("id", "=", id).returningAll().executeTakeFirstOrThrow();
       const changes: Record<string, unknown> = diff(before, after);
       if (input.petIds) {

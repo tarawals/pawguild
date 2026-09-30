@@ -194,6 +194,7 @@ export interface ReservationsTable {
   cancellationReason: string | null;
   createdAt: CreatedAt;
   updatedAt: Generated<Date>;
+  groomerMembershipId: string | null;
 }
 
 export interface ReservationPetsTable {

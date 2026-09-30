@@ -19,6 +19,7 @@ import { dashboardRoutes } from "./routes/dashboard";
 import { locationRoutes } from "./routes/locations";
 import { petRoutes } from "./routes/pets";
 import { reportRoutes } from "./routes/reports";
+import { groomingRoutes } from "./routes/grooming";
 import { reservationRoutes } from "./routes/reservations";
 import { resourceRoutes } from "./routes/resources";
 import { serviceRoutes } from "./routes/services";
@@ -154,6 +155,7 @@ export async function buildApp(opts: { db: Db; config: Config; logger?: boolean 
   await app.register(reservationRoutes, { prefix: "/api/reservations" });
   await app.register(billingRoutes, { prefix: "/api" });
   await app.register(reportRoutes, { prefix: "/api/reports" });
+  await app.register(groomingRoutes, { prefix: "/api/grooming" });
   await app.register(dashboardRoutes, { prefix: "/api/dashboard" });
   return app;
 }
