@@ -23,6 +23,7 @@ export function Layout() {
           <div className="nav-section">Operations</div>
           {canReadReservations && <NavLink to="/care">Today's care</NavLink>}
           {canReadReservations && <NavLink to="/reservations">Reservations</NavLink>}
+          {canReadReservations && <NavLink to="/grooming">Grooming</NavLink>}
           {canReadReservations && <NavLink to="/incidents">Incidents</NavLink>}
           {canReadBilling && <NavLink to="/invoices">Invoices</NavLink>}
           <div className="nav-section">Clients</div>

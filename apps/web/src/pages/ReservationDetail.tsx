@@ -10,7 +10,7 @@ import { CheckOutPanel } from "../components/CheckOutPanel";
 import { KennelAssignment } from "../components/KennelAssignment";
 import { StatusActions } from "../components/StatusActions";
 import { ErrorAlert, Loading, PageHeader, Panel, ReservationStatusBadge } from "../components/ui";
-import { formatDateTime, formatRange } from "../units";
+import { formatDateTime, formatRange, toLocalInput } from "../units";
 import { History } from "./History";
 
 export function ReservationDetailPage() {
@@ -59,6 +59,7 @@ export function ReservationDetailPage() {
               <dt>Customer</dt><dd><Link to={`/customers/${r.customer.id}`}>{r.customer.firstName} {r.customer.lastName}</Link>{r.customer.phone && ` · ${r.customer.phone}`}</dd>
               <dt>Service</dt><dd>{r.service.name}</dd>
               <dt>Location</dt><dd>{r.location.name}</dd>
+              {r.service.category === "grooming" && <><dt>Groomer</dt><dd>{r.groomer?.name ?? <span className="muted">Not assigned — <Link to={`/grooming?date=${toLocalInput(r.startsAt).slice(0, 10)}`}>assign on the grooming schedule</Link></span>}</dd></>}
               <dt>Booked</dt><dd>{formatDateTime(r.createdAt)}</dd>
               {r.confirmedAt && <><dt>Confirmed</dt><dd>{formatDateTime(r.confirmedAt)}</dd></>}
               {r.checkedInAt && <><dt>Checked in</dt><dd>{formatDateTime(r.checkedInAt)}</dd></>}

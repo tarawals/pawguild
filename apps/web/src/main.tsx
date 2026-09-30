@@ -8,6 +8,7 @@ import { CapacityPage } from "./pages/Capacity";
 import { ChangePasswordPage } from "./pages/ChangePassword";
 import { StaffPage } from "./pages/Staff";
 import { ReportsPage } from "./pages/Reports";
+import { GroomingPage } from "./pages/Grooming";
 import { IncidentsPage } from "./pages/Incidents";
 import { InvoiceDetailPage } from "./pages/InvoiceDetail";
 import { InvoicesPage } from "./pages/Invoices";
@@ -82,6 +83,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="care" element={<TodayCarePage />} />
             <Route path="staff" element={<StaffPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="grooming" element={<GroomingPage />} />
             <Route path="account/password" element={<ChangePasswordPage />} />
             <Route path="incidents" element={<IncidentsPage />} />
             <Route path="invoices" element={<InvoicesPage />} />

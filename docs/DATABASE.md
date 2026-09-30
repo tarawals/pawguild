@@ -162,6 +162,14 @@ Tables without RLS: `users`, `sessions` and `login_attempts`. They are identity 
 tenant is known, and the app only reaches them by id, email or token hash.
 `organizations` and `memberships` have RLS that also lets a user see their own memberships.
 
+## 0011_grooming
+
+`reservations.groomer_membership_id`: the staff member grooming a grooming appointment, with a
+composite FK to `memberships (organization_id, id)` so it can never point at another tenant's staff.
+Indexed by groomer and start time. A groomer can't hold two overlapping active appointments; this is
+enforced in the API under a transaction-scoped advisory lock per groomer (as with pets and kennels,
+not by a database constraint).
+
 ## Conventions
 
 - Money: `bigint` integer cents (see ADR 0003). Never `numeric` or float in application code.

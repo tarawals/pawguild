@@ -62,6 +62,7 @@ export async function seed(connectionString: string, password: string) {
         { email: "owner@harborhounds.example", firstName: "Jordan", lastName: "Reyes", role: "owner" },
         { email: "desk@harborhounds.example", firstName: "Sam", lastName: "Patel", role: "front_desk" },
         { email: "care@harborhounds.example", firstName: "Alex", lastName: "Kim", role: "care_attendant" },
+        { email: "groomer@harborhounds.example", firstName: "Avery", lastName: "Lin", role: "groomer" },
       ];
       for (const s of staff) {
         const user = await trx.insertInto("users")
@@ -104,7 +105,7 @@ export async function seed(connectionString: string, password: string) {
       }
     });
     console.log("seeded demo organization 'Harbor Hounds Pet Resort'");
-    console.log("sign in as owner@harborhounds.example / desk@… / care@… with SEED_PASSWORD");
+    console.log("sign in as owner@harborhounds.example / desk@… / care@… / groomer@… with SEED_PASSWORD");
   } finally {
     await db.destroy();
   }

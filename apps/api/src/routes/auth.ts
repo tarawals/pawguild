@@ -99,6 +99,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         organization: org,
         role: auth.role,
         roleLabel: ROLE_LABELS[auth.role],
+        membershipId: auth.membershipId,
         permissions: [...permissionsFor(auth.role)],
       };
     });

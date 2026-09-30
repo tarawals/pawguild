@@ -34,7 +34,7 @@ npm run dev:api                                   # http://127.0.0.1:3001
 npm run dev:web                                   # http://127.0.0.1:5173
 ```
 
-Sign in as `owner@harborhounds.example` (or `desk@…`, `care@…`) with the `SEED_PASSWORD` from your `.env`.
+Sign in as `owner@harborhounds.example` (or `desk@…`, `care@…`, `groomer@…`) with the `SEED_PASSWORD` from your `.env`.
 
 ## Checks
 

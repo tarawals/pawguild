@@ -3,7 +3,7 @@ import { describeHoursProblem, estimateReservation, formatMoney, hoursProblem, P
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
-  ApiError, get, patch, post, type Customer, type CustomerListItem, type Location, type Reservation, type Service,
+  ApiError, get, patch, post, type Customer, type GroomingStaff, type CustomerListItem, type Location, type Reservation, type Service,
 } from "../api";
 import { useCan, useMe } from "../auth";
 import { Checkbox, ErrorAlert, fieldErrors, Loading, PageHeader, Panel, SelectField, TextArea, TextField } from "../components/ui";
@@ -75,9 +75,12 @@ export function ReservationFormPage() {
   const [overrideCapacity, setOverrideCapacity] = useState(false);
   const canOverride = useCan("reservations:override_capacity");
   const [overrideHours, setOverrideHours] = useState(false);
+  const [groomerId, setGroomerId] = useState("");
   const canOverrideHours = useCan("reservations:override_hours");
 
   const service = services.data?.items.find((s) => s.id === (editing ? existing.data?.service.id : serviceId));
+  const isGrooming = service?.category === "grooming";
+  const staff = useQuery({ queryKey: ["grooming", "staff"], queryFn: () => get<{ items: GroomingStaff[] }>("/api/grooming/staff"), enabled: isGrooming });
   const activePets = useMemo(() => (customer.data?.pets ?? []).filter((p) => !p.archivedAt && p.status === "active"), [customer.data]);
 
   useEffect(() => {
@@ -86,6 +89,7 @@ export function ReservationFormPage() {
       setStart(toLocalInput(existing.data.startsAt));
       setEnd(toLocalInput(existing.data.endsAt));
       setNotes(existing.data.notes ?? "");
+      setGroomerId(existing.data.groomer?.membershipId ?? "");
     }
   }, [existing.data]);
   useEffect(() => { if (!editing && activePets.length === 1) setPetIds([activePets[0]!.id]); }, [editing, activePets]);
@@ -110,9 +114,10 @@ export function ReservationFormPage() {
         ]);
       }
       return editing
-        ? patch<Reservation>(`/api/reservations/${id}`, { petIds, startsAt, endsAt, notes, overrideCapacity, overrideHours })
+        ? patch<Reservation>(`/api/reservations/${id}`, { petIds, startsAt, endsAt, notes, overrideCapacity, overrideHours, ...(isGrooming && { groomerMembershipId: groomerId || null }) })
         : post<Reservation>("/api/reservations", {
             customerId, locationId, serviceId, petIds, startsAt, endsAt, notes, overrideCapacity, overrideHours,
+            ...(isGrooming && groomerId && { groomerMembershipId: groomerId }),
             status: confirmNow ? "confirmed" : "pending",
           });
     },
@@ -217,6 +222,24 @@ export function ReservationFormPage() {
             <div className="alert alert-warning" role="status" style={{ margin: "8px 0 0" }}>{hoursWarnings.join(". ")}.</div>
           )}
         </fieldset>
+        {isGrooming && (
+          <SelectField label="Groomer" value={groomerId} onChange={(e) => setGroomerId(e.target.value)} error={err("groomerMembershipId")}
+            hint="Optional. You can also assign from the grooming schedule.">
+            <option value="">Not assigned yet</option>
+            {(() => {
+              const items = staff.data?.items ?? [];
+              // Keep a current groomer who has since been deactivated visible.
+              const current = existing.data?.groomer;
+              const groomers = items.filter((s) => s.role === "groomer");
+              const others = items.filter((s) => s.role !== "groomer");
+              return <>
+                {current && !items.some((s) => s.membershipId === current.membershipId) && <option value={current.membershipId}>{current.name}</option>}
+                {groomers.length > 0 && <optgroup label="Groomers">{groomers.map((s) => <option key={s.membershipId} value={s.membershipId}>{s.name}</option>)}</optgroup>}
+                {others.length > 0 && <optgroup label="Other staff">{others.map((s) => <option key={s.membershipId} value={s.membershipId}>{s.name}</option>)}</optgroup>}
+              </>;
+            })()}
+          </SelectField>
+        )}
         <TextArea label="Reservation notes" hint="Visible to staff." value={notes} onChange={(e) => setNotes(e.target.value)} error={err("notes")} />
         {estimate && (
           <div className="estimate" aria-live="polite">

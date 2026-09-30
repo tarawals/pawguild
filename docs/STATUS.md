@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-09-29 (session 12: locations admin, business hours and closures)_
+_Last updated: 2026-09-30 (session 13: grooming schedule)_
 
 ## Built and tested
 
@@ -30,6 +30,7 @@ _Last updated: 2026-09-29 (session 12: locations admin, business hours and closu
 | **Staff administration** (add staff with a temporary password they must change; edit role, title, phone, locations; deactivate, which signs them out everywhere; reactivate; reset password, which also clears a lockout; seniority rules prevent escalation and self-lockout; change your own password) | ✅ | ✅ | `employees:read` to view; `employees:manage` + seniority to change | Staff page; Change password (sidebar); forced password screen | unit + integration + e2e |
 | **Check-out review** (per-pet care summary, doses not recorded today, incidents and whether the owner was told, invoice/payment status with create/pay shortcuts; warnings inform but don't block; dashboard "Check out" opens the review) | — | summary endpoint | `reservations:read`; bill only with `billing:read`; check-out needs `stays:check_in_out` | Check-out / Stay summary panel on reservations | integration + e2e |
 | **Reports** (sales by service and month with tax, discounts and credit notes; payments, deposits and refunds by method with net collected; customer balances owed, owed back and account credit; occupancy per day/night vs limits per location; date range with presets; CSV download) | — (derived from existing tables) | ✅ | `reports:read` (shift lead and above) | Reports page | integration (reconciled against invoices, payments, dashboard) + e2e + unit (CSV) |
+| **Grooming schedule** (assign a groomer when booking, rescheduling or from the schedule, also after check-in; no double-booking a groomer; day view per location by groomer with unassigned appointments first, stations, notes and time booked; "Only my appointments" for groomers) | ✅ | ✅ | `reservations:read` to view; assign with `reservations:write` or `stays:check_in_out` | Grooming page; Groomer on booking form and reservation page | integration (incl. races, tenant isolation) + e2e |
 | **Sign-in throttling** (per email and per network address; same response for unknown emails) | ✅ | ✅ | — | Server message on sign-in page | integration |
 | **Session-ended handling** (back to sign-in with notice, then return to the same page; same-site redirects only) | — | — | — | ✅ | e2e |
 | Dashboard (outstanding balances and overpaid invoices, medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
@@ -37,22 +38,22 @@ _Last updated: 2026-09-29 (session 12: locations admin, business hours and closu
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results (2026-09-29): typecheck ✅, 46 shared unit tests ✅, 148 API integration tests ✅,
-7 web tests ✅, 36 Playwright e2e tests ✅. (`reservations.spec.ts` failed once in a full run and couldn't be
-reproduced in three later full runs or alone; the error detail wasn't kept. Watch for it.)
+Latest check results (2026-09-30): typecheck ✅, 46 shared unit tests ✅, 157 API integration tests ✅,
+7 web tests ✅, 38 Playwright e2e tests ✅. (`reservations.spec.ts` failed once in an earlier full run and hasn't
+recurred in five full runs since; still watching.)
 
 ## Not built yet (in scope, by priority)
 
-1. **Grooming**: groomer assignment and a timed schedule view (grooming can already be booked as a per-visit service)
-2. Staff scheduling
-3. More reports (e.g. tax by rate, staff activity), internal notifications, business settings UI
+1. **Staff scheduling**: shifts per location and who's working today
+2. More reports (e.g. tax by rate, staff activity), internal notifications, business settings UI
+3. Business settings UI (organization name, contact details, time zone)
 4. Recurring reservations, waitlists, pet photos
 
 ## Test coverage beyond feature tests
 
 - `auth-hardening.test.ts`: sign-in for every role, identical errors, cookie flags, expiry, revocation, tampering, deactivation, immediate role changes, injection attempts
 - `throttle.test.ts`: lockout per email and per address, reset on success, window expiry, no enumeration
-- `permissions-matrix.test.ts`: all 10 roles × 46 protected actions against the role map, and no action returns 500
+- `permissions-matrix.test.ts`: all 10 roles × 49 protected actions against the role map, and no action returns 500
 - `money-invariants.test.ts`: 40 randomized billing scenarios × 15 operations that must reconcile after every step, plus simultaneous-request races (payments, credit, refunds, invoice numbers, last capacity space, same pet)
 - `edge-cases.test.ts`: empty updates, markup/unicode, oversized input, unknown ids
 - Browser: `login.spec.ts` (every role, deep links, sign-out, session ending mid-use, safe redirects) and `full-day.spec.ts` (a full visit across three staff members)
@@ -81,7 +82,11 @@ reproduced in three later full runs or alone; the error detail wasn't kept. Watc
   match each other. A managed vaccine list would fix that.
 - Upgraded installs have no vaccination requirements until a manager sets them on each service.
 - Capacity counts pets, not size. Large and small dogs count the same.
-- Grooming isn't capacity-limited per location; use grooming stations as resources for now.
+- Grooming isn't capacity-limited per location; grooming stations are assigned per pet as resources.
+- Any active staff member can be assigned as a groomer (groomers are listed first), since in small
+  shops managers often groom too. Groomers' working hours aren't known yet, so the schedule can't
+  suggest free slots; that needs staff scheduling.
+- The grooming day and times use the browser's time zone for display, like the rest of the app.
 - Kennel availability counts any pet assigned during the requested window. That's conservative
   when two short stays share a kennel back to back within the window.
 - The booking form reads date/time inputs in the browser's timezone. Billable nights and days
@@ -102,7 +107,8 @@ reproduced in three later full runs or alone; the error detail wasn't kept. Watc
 
 ## Next recommended step
 
-**Grooming schedule:** assign a groomer to grooming appointments and add a day view by groomer and
-grooming station. Double-booking a groomer or a station should be prevented, and appointments
-should fit within business hours. The booking form would suggest open slots from the service's
-duration. Tests should cover overlap races (as for pets) and time-zone boundaries.
+**Staff scheduling (shifts):** managers create shifts per location (staff member, start, end,
+optional role note), with a weekly view and a "Working today" list on the dashboard. Overlapping
+shifts for one person are refused, and shifts respect location hours with an audited override.
+Once shifts exist, the grooming schedule can show each groomer's working hours and flag
+appointments outside them.

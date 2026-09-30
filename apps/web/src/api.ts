@@ -58,6 +58,7 @@ export interface Me {
   organization: { id: string; name: string; timezone: string; currency: string };
   role: string;
   roleLabel: string;
+  membershipId: string;
   permissions: string[];
 }
 
@@ -134,6 +135,7 @@ export interface Reservation {
   customer: { id: string; firstName: string; lastName: string; phone: string | null };
   service: { id: string; name: string; category: string };
   location: { id: string; name: string };
+  groomer: { membershipId: string; name: string } | null;
   pets: {
     id: string; name: string; species: string; breed: string | null; allergies: string | null; medicalNotes: string | null;
     resourceId: string | null; resourceName: string | null;
@@ -267,4 +269,15 @@ export interface OccupancyReport {
   from: string; to: string;
   locations: { locationId: string; locationName: string; daycare: OccupancySummary; boarding: OccupancySummary;
     days: { date: string; daycare: number; boarding: number; daycareLimit: number | null; boardingLimit: number | null }[] }[];
+}
+
+export interface GroomingStaff { membershipId: string; name: string; role: string; jobTitle: string | null }
+export interface GroomingAppointment {
+  id: string; status: string; startsAt: string; endsAt: string; notes: string | null; groomerMembershipId: string | null;
+  serviceName: string; customerId: string; customerName: string;
+  pets: { id: string; name: string; breed: string | null; resourceName: string | null }[];
+}
+export interface GroomingSchedule {
+  date: string; timeZone: string; location: { id: string; name: string };
+  groomers: GroomingStaff[]; appointments: GroomingAppointment[];
 }
