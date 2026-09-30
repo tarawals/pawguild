@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
-import { formatMoney } from "@pawguild/shared";
+import { formatMoney, ROLE_LABELS, type Role } from "@pawguild/shared";
 import { get, type DashboardSummary, type ReservationListItem } from "../api";
 import { useCan, useMe } from "../auth";
 import { useStatusChange } from "../components/StatusActions";
@@ -134,6 +134,18 @@ export function DashboardPage() {
             </Panel>
             <Panel title="Departures today" bodyless>
               {summary.data.departures.length === 0 ? <EmptyState title="No departures due" /> : <StayTable rows={summary.data.departures} kind="departures" />}
+            </Panel>
+            <Panel title="Working today" bodyless actions={<Link className="btn btn-small" to="/schedule">Staff schedule</Link>}>
+              {summary.data.workingToday.length === 0 ? <EmptyState title="No shifts scheduled today" /> : (
+                <ul className="stack" style={{ listStyle: "none", margin: 0, padding: "8px 16px", gap: 0 }}>
+                  {summary.data.workingToday.map((w) => (
+                    <li key={w.id} className="dose">
+                      <span><strong>{w.staffName}</strong> <span className="muted">· {ROLE_LABELS[w.role as Role] ?? w.role}{summary.data.occupancy.length > 1 && ` · ${w.locationName}`}{w.note && ` · ${w.note}`}</span></span>
+                      <span>{formatTime(w.startsAt)}–{formatTime(w.endsAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </Panel>
           </div>
           <Panel title="Vaccinations needing attention" bodyless>

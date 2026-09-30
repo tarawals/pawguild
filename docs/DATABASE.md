@@ -170,6 +170,16 @@ Indexed by groomer and start time. A groomer can't hold two overlapping active a
 enforced in the API under a transaction-scoped advisory lock per groomer (as with pets and kennels,
 not by a database constraint).
 
+## 0012_shifts
+
+`shifts`: one row per staff member per shift at a location (`starts_at`, `ends_at`, optional
+`note`), with composite FKs to `locations` and `memberships` and RLS like every tenant table.
+A shift is at most 16 hours (`CHECK`). A person can't have overlapping shifts at any location;
+this is enforced in the API under an advisory lock per person. Shifts are planning data, so the
+app role may `DELETE` them; every create, change and delete is audited with the full values.
+Shifts outside business hours are allowed (opening and closing duties) and flagged in the API
+response as `warnings`.
+
 ## Conventions
 
 - Money: `bigint` integer cents (see ADR 0003). Never `numeric` or float in application code.

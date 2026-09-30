@@ -160,6 +160,7 @@ export interface DashboardSummary {
   occupancy: { locationId: string; locationName: string; daycare: Occupancy; boarding: Occupancy }[];
   arrivals: ReservationListItem[];
   departures: ReservationListItem[];
+  workingToday: { id: string; startsAt: string; endsAt: string; note: string | null; membershipId: string; role: string; locationName: string; staffName: string }[];
   vaccinationAlerts: { petId: string; petName: string; vaccine: string; expiresOn: string; customerName: string }[];
 }
 
@@ -279,5 +280,14 @@ export interface GroomingAppointment {
 }
 export interface GroomingSchedule {
   date: string; timeZone: string; location: { id: string; name: string };
-  groomers: GroomingStaff[]; appointments: GroomingAppointment[];
+  groomers: (GroomingStaff & { shifts: { startsAt: string; endsAt: string }[] })[]; appointments: GroomingAppointment[];
+}
+
+export interface Shift {
+  id: string; locationId: string; locationName: string; membershipId: string; staffName: string; role: string;
+  startsAt: string; endsAt: string; note: string | null; timeZone: string;
+  /** Local calendar date the shift starts on, at its location. */
+  date: string;
+  /** Business-hours notes, e.g. a start before opening. Informational only. */
+  warnings: string[];
 }

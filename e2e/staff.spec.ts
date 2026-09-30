@@ -18,7 +18,7 @@ test.describe.configure({ mode: "serial" });
 
 test("owner adds a staff member, who must choose their own password; deactivation signs them out", async ({ page, browser }) => {
   await signInHome(page, "owner@harborhounds.example");
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Staff" }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Staff", exact: true }).click();
   await page.getByRole("button", { name: "Add staff member" }).click();
   const form = page.getByRole("form", { name: "Add staff member" });
   await form.getByLabel("First name").fill("Casey");
@@ -77,7 +77,7 @@ test("reactivate and reset a password; front desk can see staff but not change t
 
   const desk = await newPage(browser);
   await signInHome(desk, "desk@harborhounds.example");
-  await desk.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Staff" }).click();
+  await desk.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Staff", exact: true }).click();
   await expect(desk.getByRole("row", { name: /Jordan Reyes/ })).toContainText("Owner");
   await expect(desk.getByRole("button", { name: "Add staff member" })).toHaveCount(0);
   await expect(desk.getByRole("button", { name: /Deactivate|Reset password|Edit/ })).toHaveCount(0);

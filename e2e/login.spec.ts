@@ -14,6 +14,7 @@ const ROLES = [
   { email: "owner@harborhounds.example", name: "Jordan Reyes", role: "Owner", sees: ["Invoices", "Services", "Locations", "Today's care"], hidden: [] },
   { email: "desk@harborhounds.example", name: "Sam Patel", role: "Front Desk", sees: ["Invoices", "Reservations", "Customers"], hidden: [] },
   { email: "care@harborhounds.example", name: "Alex Kim", role: "Care Attendant", sees: ["Today's care", "Customers", "Pets"], hidden: ["Invoices"] },
+  { email: "groomer@harborhounds.example", name: "Avery Lin", role: "Groomer", sees: ["Grooming", "Staff schedule", "Customers"], hidden: ["Invoices", "Reports"] },
 ];
 
 for (const r of ROLES) {

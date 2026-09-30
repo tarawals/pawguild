@@ -178,3 +178,5 @@ tfoot th, tfoot td { border-bottom: 0; background: transparent; text-transform: 
   .panel { box-shadow: none; border-color: #bbb; }
   .content { padding: 0; max-width: none; }
 }
+.schedule-grid th, .schedule-grid td { padding: 8px 6px; }
+.schedule-grid .btn-small { padding: 4px 7px; font-size: 0.82rem; }

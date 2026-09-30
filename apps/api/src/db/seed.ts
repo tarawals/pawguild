@@ -4,6 +4,7 @@
  */
 import { fileURLToPath } from "node:url";
 import { sql } from "kysely";
+import { addDays, localParts, zonedDateTime } from "@pawguild/shared";
 import { hashPassword } from "../auth/password";
 import { createDb } from "./index";
 
@@ -64,12 +65,27 @@ export async function seed(connectionString: string, password: string) {
         { email: "care@harborhounds.example", firstName: "Alex", lastName: "Kim", role: "care_attendant" },
         { email: "groomer@harborhounds.example", firstName: "Avery", lastName: "Lin", role: "groomer" },
       ];
+      const memberIds: Record<string, string> = {};
       for (const s of staff) {
         const user = await trx.insertInto("users")
           .values({ email: s.email, firstName: s.firstName, lastName: s.lastName, passwordHash })
           .returning("id").executeTakeFirstOrThrow();
-        await trx.insertInto("memberships").values({ organizationId: org.id, userId: user.id, role: s.role }).execute();
+        const membership = await trx.insertInto("memberships").values({ organizationId: org.id, userId: user.id, role: s.role })
+          .returning("id").executeTakeFirstOrThrow();
+        memberIds[s.role] = membership.id;
       }
+      // This week's shifts (Monday to Sunday, the business's local time).
+      const ownerUser = await trx.selectFrom("users").select("id").where("email", "=", "owner@harborhounds.example").executeTakeFirstOrThrow();
+      const today = localParts(new Date(), "America/New_York");
+      const monday = addDays(today.date, -((today.weekday + 6) % 7));
+      const pattern: [string, string, string, string | null][] = [
+        ["front_desk", "07:00", "15:00", "Opening"], ["care_attendant", "11:00", "19:00", "Closing"], ["groomer", "09:00", "17:00", null],
+      ];
+      await trx.insertInto("shifts").values(Array.from({ length: 7 }, (_, i) => addDays(monday, i)).flatMap((date) =>
+        pattern.map(([role, from, to, note]) => ({
+          organizationId: org.id, locationId: location.id, membershipId: memberIds[role]!, note, createdByUserId: ownerUser.id,
+          startsAt: zonedDateTime(date, from, "America/New_York"), endsAt: zonedDateTime(date, to, "America/New_York"),
+        })))).execute();
       const customers = [
         { firstName: "Morgan", lastName: "Ellis", email: "morgan.ellis@example.com", phone: "555-0142", pets: [
           { name: "Biscuit", species: "dog", breed: "Golden Retriever", sex: "male", weightGrams: 31000, feedingInstructions: "1.5 cups kibble twice daily" },

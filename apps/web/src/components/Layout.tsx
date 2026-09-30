@@ -24,6 +24,7 @@ export function Layout() {
           {canReadReservations && <NavLink to="/care">Today's care</NavLink>}
           {canReadReservations && <NavLink to="/reservations">Reservations</NavLink>}
           {canReadReservations && <NavLink to="/grooming">Grooming</NavLink>}
+          <NavLink to="/schedule">Staff schedule</NavLink>
           {canReadReservations && <NavLink to="/incidents">Incidents</NavLink>}
           {canReadBilling && <NavLink to="/invoices">Invoices</NavLink>}
           <div className="nav-section">Clients</div>

@@ -29,6 +29,7 @@ test("front desk books a boarding stay, checks the pet in from the dashboard, an
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Biscuit · Boarding — Standard Suite");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Confirmed");
+  const reservationUrl = page.url();
 
   // Double-booking the same pet is refused with a clear message.
   await page.goto("/reservations/new");
@@ -47,8 +48,11 @@ test("front desk books a boarding stay, checks the pet in from the dashboard, an
   await expect(page.getByRole("region", { name: "Departures today" }).getByRole("link", { name: "Biscuit" })).toHaveCount(0); // leaves tomorrow
 
   // Check out from the reservation page.
+  // (Open this stay by its address: other tests book stays at the same time today, and the list
+  // orders ties unpredictably, so "the first row" isn't necessarily this one.)
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Reservations" }).click();
-  await page.getByRole("link", { name: /–/ }).first().click();
+  await expect(page.getByRole("row", { name: /Biscuit/ }).first()).toBeVisible();
+  await page.goto(reservationUrl);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Checked In");
   await page.getByRole("button", { name: "Check out" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Completed");

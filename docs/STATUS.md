@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-09-30 (session 13: grooming schedule)_
+_Last updated: 2026-09-30 (session 14: staff scheduling)_
 
 ## Built and tested
 
@@ -31,6 +31,7 @@ _Last updated: 2026-09-30 (session 13: grooming schedule)_
 | **Check-out review** (per-pet care summary, doses not recorded today, incidents and whether the owner was told, invoice/payment status with create/pay shortcuts; warnings inform but don't block; dashboard "Check out" opens the review) | — | summary endpoint | `reservations:read`; bill only with `billing:read`; check-out needs `stays:check_in_out` | Check-out / Stay summary panel on reservations | integration + e2e |
 | **Reports** (sales by service and month with tax, discounts and credit notes; payments, deposits and refunds by method with net collected; customer balances owed, owed back and account credit; occupancy per day/night vs limits per location; date range with presets; CSV download) | — (derived from existing tables) | ✅ | `reports:read` (shift lead and above) | Reports page | integration (reconciled against invoices, payments, dashboard) + e2e + unit (CSV) |
 | **Grooming schedule** (assign a groomer when booking, rescheduling or from the schedule, also after check-in; no double-booking a groomer; day view per location by groomer with unassigned appointments first, stations, notes and time booked; "Only my appointments" for groomers) | ✅ | ✅ | `reservations:read` to view; assign with `reservations:write` or `stays:check_in_out` | Grooming page; Groomer on booking form and reservation page | integration (incl. races, tenant isolation) + e2e |
+| **Staff scheduling** (shifts per person and location; week grid; add/edit/delete; copy last week keeping local times across DST and reporting skipped shifts; no overlapping shifts for one person; shifts outside business hours allowed but flagged; "Working today" on the dashboard; each groomer's shift and appointments outside it on the grooming schedule) | ✅ | ✅ | everyone signed in views; `schedules:manage` (managers and above) changes | Staff schedule page; dashboard panel; grooming schedule | unit (DST) + integration (incl. races, tenant isolation) + e2e |
 | **Sign-in throttling** (per email and per network address; same response for unknown emails) | ✅ | ✅ | — | Server message on sign-in page | integration |
 | **Session-ended handling** (back to sign-in with notice, then return to the same page; same-site redirects only) | — | — | — | ✅ | e2e |
 | Dashboard (outstanding balances and overpaid invoices, medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
@@ -38,22 +39,23 @@ _Last updated: 2026-09-30 (session 13: grooming schedule)_
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results (2026-09-30): typecheck ✅, 46 shared unit tests ✅, 157 API integration tests ✅,
-7 web tests ✅, 38 Playwright e2e tests ✅. (`reservations.spec.ts` failed once in an earlier full run and hasn't
-recurred in four full runs since; still watching.)
+Latest check results (2026-09-30): typecheck ✅, 49 shared unit tests ✅, 166 API integration tests ✅,
+7 web tests ✅, 42 Playwright e2e tests ✅ (two full runs in a row).
+The earlier intermittent `reservations.spec.ts` failure is fixed: it opened "the first row" of a list
+where another test's stay had the same start time, and ties are ordered by id.
 
 ## Not built yet (in scope, by priority)
 
-1. **Staff scheduling**: shifts per location and who's working today
-2. More reports (e.g. tax by rate, staff activity), internal notifications, business settings UI
-3. Business settings UI (organization name, contact details, time zone)
+1. Business settings UI (organization name, contact details, time zone)
+2. Internal notifications (e.g. overdue medication, new incidents, unassigned grooming)
+3. More reports (e.g. tax by rate, staff activity), internal notifications, business settings UI
 4. Recurring reservations, waitlists, pet photos
 
 ## Test coverage beyond feature tests
 
 - `auth-hardening.test.ts`: sign-in for every role, identical errors, cookie flags, expiry, revocation, tampering, deactivation, immediate role changes, injection attempts
 - `throttle.test.ts`: lockout per email and per address, reset on success, window expiry, no enumeration
-- `permissions-matrix.test.ts`: all 10 roles × 49 protected actions against the role map, and no action returns 500
+- `permissions-matrix.test.ts`: all 10 roles × 54 protected actions against the role map, and no action returns 500
 - `money-invariants.test.ts`: 40 randomized billing scenarios × 15 operations that must reconcile after every step, plus simultaneous-request races (payments, credit, refunds, invoice numbers, last capacity space, same pet)
 - `edge-cases.test.ts`: empty updates, markup/unicode, oversized input, unknown ids
 - Browser: `login.spec.ts` (every role, deep links, sign-out, session ending mid-use, safe redirects) and `full-day.spec.ts` (a full visit across three staff members)
@@ -84,8 +86,8 @@ recurred in four full runs since; still watching.)
 - Capacity counts pets, not size. Large and small dogs count the same.
 - Grooming isn't capacity-limited per location; grooming stations are assigned per pet as resources.
 - Any active staff member can be assigned as a groomer (groomers are listed first), since in small
-  shops managers often groom too. Groomers' working hours aren't known yet, so the schedule can't
-  suggest free slots; that needs staff scheduling.
+  shops managers often groom too. The grooming schedule shows each groomer's shift and flags
+  appointments outside it, but doesn't yet suggest free slots.
 - The grooming day and times use the browser's time zone for display, like the rest of the app.
 - Kennel availability counts any pet assigned during the requested window. That's conservative
   when two short stays share a kennel back to back within the window.
@@ -102,13 +104,17 @@ recurred in four full runs since; still watching.)
   off or pick up that day so staff can contact those customers.
 - Hours are one open–close range per day (no lunch break or split shifts), and there are no
   separate drop-off and pick-up windows.
+- Shift times are entered and shown in the browser's time zone, like bookings. Copying a week keeps
+  each shift's local time at its location, so a 7 AM shift stays 7 AM across a DST change.
+- There's no time-off or availability tracking, and no hours or overtime totals beyond the weekly
+  hours shown per person.
 - Location access isn't limited by staff location assignments yet: anyone with the permission sees
   and manages every location in the organization.
 
 ## Next recommended step
 
-**Staff scheduling (shifts):** managers create shifts per location (staff member, start, end,
-optional role note), with a weekly view and a "Working today" list on the dashboard. Overlapping
-shifts for one person are refused, and shifts respect location hours with an audited override.
-Once shifts exist, the grooming schedule can show each groomer's working hours and flag
-appointments outside them.
+**Business settings:** let owners and administrators edit the organization's name, contact
+details and time zone (`settings:manage`), with an audit entry and a clear warning that changing
+the time zone moves what "today" means for care, billing days and reports. Then **internal
+notifications**: an in-app list of things needing attention (overdue medication, new incidents,
+grooming without a groomer, shifts nobody is on), generated from live records.

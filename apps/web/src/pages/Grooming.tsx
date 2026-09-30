@@ -34,7 +34,7 @@ function GroomerSelect({ appointment, staff, label }: { appointment: GroomingApp
   );
 }
 
-function AppointmentCard({ a, staff, canAssign }: { a: GroomingAppointment; staff: GroomingStaff[]; canAssign: boolean }) {
+function AppointmentCard({ a, staff, canAssign, outsideShift }: { a: GroomingAppointment; staff: GroomingStaff[]; canAssign: boolean; outsideShift?: string }) {
   const pets = a.pets.map((p) => p.name).join(", ");
   const stations = [...new Set(a.pets.map((p) => p.resourceName).filter(Boolean))];
   return (
@@ -49,6 +49,7 @@ function AppointmentCard({ a, staff, canAssign }: { a: GroomingAppointment; staf
         {" · "}{stations.length ? stations.join(", ") : "No station assigned"}
       </div>
       {a.notes && <div className="muted" style={{ whiteSpace: "pre-wrap" }}>{a.notes}</div>}
+      {outsideShift && <div><span className="badge badge-warning">{outsideShift}</span></div>}
       {canAssign && ASSIGNABLE.includes(a.status) && (
         <div style={{ marginTop: 8 }}><GroomerSelect appointment={a} staff={staff} label={`Groomer for ${pets} at ${formatTime(a.startsAt)}`} /></div>
       )}
@@ -125,9 +126,14 @@ export function GroomingPage() {
                 return (
                   <Panel key={g.membershipId} title={<>{g.name}{g.membershipId === me.membershipId && " (you)"}</>}
                     actions={<span className="muted" style={{ fontSize: "0.875rem" }}>{list.length} · {Math.floor(busy / 60)}h{busy % 60 ? ` ${Math.round(busy % 60)}m` : ""} booked</span>}>
+                    <p className="muted" style={{ margin: "0 0 8px" }}>
+                      {g.shifts.length ? `On shift ${g.shifts.map((sh) => `${formatTime(sh.startsAt)}–${formatTime(sh.endsAt)}`).join(", ")}` : "No shift scheduled"}
+                    </p>
                     {list.length === 0 ? <p className="muted" style={{ margin: 0 }}>Nothing booked.</p> : (
                       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                        {list.map((a) => <AppointmentCard key={a.id} a={a} staff={staff.data?.items ?? []} canAssign={canAssign} />)}
+                        {list.map((a) => <AppointmentCard key={a.id} a={a} staff={staff.data?.items ?? []} canAssign={canAssign}
+                          outsideShift={g.shifts.length > 0 && a.status !== "no_show" && !g.shifts.some((sh) => sh.startsAt <= a.startsAt && sh.endsAt >= a.endsAt)
+                            ? `Outside ${g.name}'s shift` : undefined} />)}
                       </ul>
                     )}
                   </Panel>
