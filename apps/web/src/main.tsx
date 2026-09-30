@@ -11,6 +11,7 @@ import { ReportsPage } from "./pages/Reports";
 import { GroomingPage } from "./pages/Grooming";
 import { SchedulePage } from "./pages/Schedule";
 import { SettingsPage } from "./pages/Settings";
+import { NotificationsPage } from "./pages/Notifications";
 import { IncidentsPage } from "./pages/Incidents";
 import { InvoiceDetailPage } from "./pages/InvoiceDetail";
 import { InvoicesPage } from "./pages/Invoices";
@@ -48,7 +49,11 @@ function onApiError(err: unknown, query?: { queryKey: readonly unknown[] }) {
 
 const queryClient: QueryClient = new QueryClient({
   queryCache: new QueryCache({ onError: (err, query) => onApiError(err, query) }),
-  mutationCache: new MutationCache({ onError: (err) => onApiError(err) }),
+  mutationCache: new MutationCache({
+    onError: (err) => onApiError(err),
+    // Almost any change can resolve (or cause) a notification, so recheck after every change.
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: ["notifications"] }); },
+  }),
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: true,
@@ -88,6 +93,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="grooming" element={<GroomingPage />} />
             <Route path="schedule" element={<SchedulePage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
             <Route path="account/password" element={<ChangePasswordPage />} />
             <Route path="incidents" element={<IncidentsPage />} />
             <Route path="invoices" element={<InvoicesPage />} />

@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-09-30 (session 14: staff scheduling)_
+_Last updated: 2026-09-30 (session 15: business settings and notifications)_
 
 ## Built and tested
 
@@ -32,6 +32,8 @@ _Last updated: 2026-09-30 (session 14: staff scheduling)_
 | **Reports** (sales by service and month with tax, discounts and credit notes; payments, deposits and refunds by method with net collected; customer balances owed, owed back and account credit; occupancy per day/night vs limits per location; date range with presets; CSV download) | — (derived from existing tables) | ✅ | `reports:read` (shift lead and above) | Reports page | integration (reconciled against invoices, payments, dashboard) + e2e + unit (CSV) |
 | **Grooming schedule** (assign a groomer when booking, rescheduling or from the schedule, also after check-in; no double-booking a groomer; day view per location by groomer with unassigned appointments first, stations, notes and time booked; "Only my appointments" for groomers) | ✅ | ✅ | `reservations:read` to view; assign with `reservations:write` or `stays:check_in_out` | Grooming page; Groomer on booking form and reservation page | integration (incl. races, tenant isolation) + e2e |
 | **Staff scheduling** (shifts per person and location; week grid; add/edit/delete; copy last week keeping local times across DST and reporting skipped shifts; no overlapping shifts for one person; shifts outside business hours allowed but flagged; "Working today" on the dashboard; each groomer's shift and appointments outside it on the grooming schedule) | ✅ | ✅ | everyone signed in views; `schedules:manage` (managers and above) changes | Staff schedule page; dashboard panel; grooming schedule | unit (DST) + integration (incl. races, tenant isolation) + e2e |
+| **Business settings** (organization name, email, phone, time zone; confirmation explaining what a time-zone change affects; currency fixed) | ✅ + RLS split | ✅ | view: signed in; edit: `settings:manage` (owner, administrator) | Business settings page | integration (incl. direct RLS check) + e2e |
+| **Internal notifications** (overdue medication, pets past pick-up, arrivals needing vaccinations, unconfirmed bookings in the next 48h, grooming without a groomer, serious or follow-up incidents, over capacity, overpaid invoices, open days with nobody scheduled; each shown only to roles that can act; computed live, clears itself) | — (derived) | ✅ | signed in; items filtered by permission | Notifications page; count in the top bar (rechecks every minute and after every change) | integration + e2e |
 | **Sign-in throttling** (per email and per network address; same response for unknown emails) | ✅ | ✅ | — | Server message on sign-in page | integration |
 | **Session-ended handling** (back to sign-in with notice, then return to the same page; same-site redirects only) | — | — | — | ✅ | e2e |
 | Dashboard (outstanding balances and overpaid invoices, medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
@@ -39,23 +41,21 @@ _Last updated: 2026-09-30 (session 14: staff scheduling)_
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results (2026-09-30): typecheck ✅, 49 shared unit tests ✅, 166 API integration tests ✅,
-7 web tests ✅, 42 Playwright e2e tests ✅ (two full runs in a row).
-The earlier intermittent `reservations.spec.ts` failure is fixed: it opened "the first row" of a list
-where another test's stay had the same start time, and ties are ordered by id.
+Latest check results (2026-09-30): typecheck ✅, 49 shared unit tests ✅, 178 API integration tests ✅,
+7 web tests ✅, 45 Playwright e2e tests ✅.
 
 ## Not built yet (in scope, by priority)
 
-1. Business settings UI (organization name, contact details, time zone)
-2. Internal notifications (e.g. overdue medication, new incidents, unassigned grooming)
+1. Recurring reservations (e.g. daycare every Mon/Wed/Fri)
+2. Packages and memberships (prepaid daycare days)
 3. More reports (e.g. tax by rate, staff activity), internal notifications, business settings UI
-4. Recurring reservations, waitlists, pet photos
+4. Waitlists, pet photos
 
 ## Test coverage beyond feature tests
 
 - `auth-hardening.test.ts`: sign-in for every role, identical errors, cookie flags, expiry, revocation, tampering, deactivation, immediate role changes, injection attempts
 - `throttle.test.ts`: lockout per email and per address, reset on success, window expiry, no enumeration
-- `permissions-matrix.test.ts`: all 10 roles × 54 protected actions against the role map, and no action returns 500
+- `permissions-matrix.test.ts`: all 10 roles × 57 protected actions against the role map, and no action returns 500
 - `money-invariants.test.ts`: 40 randomized billing scenarios × 15 operations that must reconcile after every step, plus simultaneous-request races (payments, credit, refunds, invoice numbers, last capacity space, same pet)
 - `edge-cases.test.ts`: empty updates, markup/unicode, oversized input, unknown ids
 - Browser: `login.spec.ts` (every role, deep links, sign-out, session ending mid-use, safe redirects) and `full-day.spec.ts` (a full visit across three staff members)
@@ -99,6 +99,10 @@ where another test's stay had the same start time, and ties are ordered by id.
 - The `users` table has no RLS. Any future user listing must join through `memberships`.
 - The permission map is code-defined.
 - There is no production deployment configuration and no CI.
+- Notifications have no read or snooze state: an item stays until the problem is resolved. There is
+  no email, text or push delivery (in-app only, per current scope).
+- Changing the business time zone doesn't move existing bookings (they keep their exact times),
+  but it changes which local day they fall on for care, billing and reports.
 - Business hours are checked only when a booking is made or its times move. Adding a closure or
   changing hours doesn't change existing bookings; adding a closure reports how many bookings drop
   off or pick up that day so staff can contact those customers.
@@ -113,8 +117,8 @@ where another test's stay had the same start time, and ties are ordered by id.
 
 ## Next recommended step
 
-**Business settings:** let owners and administrators edit the organization's name, contact
-details and time zone (`settings:manage`), with an audit entry and a clear warning that changing
-the time zone moves what "today" means for care, billing days and reports. Then **internal
-notifications**: an in-app list of things needing attention (overdue medication, new incidents,
-grooming without a groomer, shifts nobody is on), generated from live records.
+**Recurring reservations:** book a repeating daycare pattern (e.g. Mon/Wed/Fri, 7:30 AM–6 PM, for
+the next N weeks) as individual reservations linked by a series id. Each occurrence goes through
+the same checks (pet double-booking, capacity, business hours and closures), and the booking
+screen previews which dates will be booked or skipped and why. Cancelling "this and following"
+cancels the remaining occurrences with one reason. Tests should cover DST, closures and capacity.

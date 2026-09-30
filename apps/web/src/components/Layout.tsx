@@ -1,5 +1,7 @@
 import { NavLink, Outlet } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useCan, useLogout, useMe } from "../auth";
+import { notificationsQuery } from "../pages/Notifications";
 
 export function Layout() {
   const me = useMe();
@@ -11,6 +13,7 @@ export function Layout() {
   const canReadStaff = useCan("employees:read");
   const canReadReports = useCan("reports:read");
   const canManageSettings = useCan("settings:manage");
+  const notifications = useQuery(notificationsQuery);
   return (
     <div className="shell">
       <a href="#main" className="skip-link">Skip to content</a>
@@ -51,9 +54,18 @@ export function Layout() {
       <div className="main">
         <header className="topbar">
           <span className="org">{me.organization.name}</span>
-          <button className="btn btn-small" onClick={() => logout.mutate()} disabled={logout.isPending}>
-            Sign out
-          </button>
+          <div className="actions">
+            <NavLink to="/notifications" className="btn btn-small"
+              aria-label={notifications.data ? `Notifications: ${notifications.data.total} need attention` : "Notifications"}>
+              Notifications
+              {notifications.data && notifications.data.total > 0 && (
+                <span className={`badge ${notifications.data.counts.high > 0 ? "badge-danger" : "badge-warning"}`}>{notifications.data.total}</span>
+              )}
+            </NavLink>
+            <button className="btn btn-small" onClick={() => logout.mutate()} disabled={logout.isPending}>
+              Sign out
+            </button>
+          </div>
         </header>
         <main id="main" className="content" tabIndex={-1}>
           <Outlet />

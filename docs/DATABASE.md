@@ -180,6 +180,17 @@ app role may `DELETE` them; every create, change and delete is audited with the 
 Shifts outside business hours are allowed (opening and closing duties) and flagged in the API
 response as `warnings`.
 
+## 0013_business_settings
+
+Splits the `organizations` RLS policy by command. Reads are unchanged: members may see the
+organizations they belong to. Updates are limited to the current request's organization
+(`id = current_org_id()`), so a person in two organizations can never change the other one from
+this session. The app role may update only `name`, `email`, `phone` and `timezone`; `currency` and
+`slug` are fixed.
+
+Notifications (`/api/notifications`) add no tables: they're computed from live records on each
+request, so they clear as soon as the underlying problem is dealt with.
+
 ## Conventions
 
 - Money: `bigint` integer cents (see ADR 0003). Never `numeric` or float in application code.

@@ -100,6 +100,7 @@ const probes: Probe[] = [
   { name: "copy a week of shifts", method: "POST", url: () => "/api/shifts/copy-week", body: {}, allowed: needs("schedules:manage") },
   { name: "view business settings", method: "GET", url: () => "/api/settings/organization", allowed: anyone },
   { name: "edit business settings", method: "PATCH", url: () => "/api/settings/organization", body: {}, allowed: needs("settings:manage") },
+  { name: "notifications", method: "GET", url: () => "/api/notifications", allowed: anyone },
   { name: "add location", method: "POST", url: () => "/api/locations", body: {}, allowed: needs("locations:manage") },
   { name: "edit location", method: "PATCH", url: () => `/api/locations/${ids.location}`, body: { name: "" }, allowed: needs("locations:manage") },
   { name: "set business hours", method: "PUT", url: () => `/api/locations/${ids.location}/hours`, body: {}, allowed: needs("locations:manage") },

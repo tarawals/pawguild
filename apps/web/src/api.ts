@@ -291,3 +291,8 @@ export interface Shift {
   /** Business-hours notes, e.g. a start before opening. Informational only. */
   warnings: string[];
 }
+
+export interface AppNotification {
+  id: string; kind: string; severity: "high" | "medium" | "low"; title: string; detail?: string; link: string; at: string | null;
+}
+export interface NotificationList { items: AppNotification[]; counts: { high: number; medium: number; low: number }; total: number }
