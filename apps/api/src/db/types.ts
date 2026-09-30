@@ -223,6 +223,19 @@ export interface LocationClosuresTable {
   reason: string | null;
 }
 
+export interface ShiftsTable {
+  id: Generated<string>;
+  organizationId: string;
+  locationId: string;
+  membershipId: string;
+  startsAt: Timestamp;
+  endsAt: Timestamp;
+  note: string | null;
+  createdByUserId: string;
+  createdAt: CreatedAt;
+  updatedAt: Generated<Date>;
+}
+
 export interface LocationCapacitiesTable {
   organizationId: string;
   locationId: string;
@@ -434,6 +447,7 @@ export interface Database {
   reservationPets: ReservationPetsTable;
   locationCapacities: LocationCapacitiesTable;
   locationHours: LocationHoursTable;
+  shifts: ShiftsTable;
   locationClosures: LocationClosuresTable;
   resources: ResourcesTable;
   serviceVaccineRequirements: ServiceVaccineRequirementsTable;

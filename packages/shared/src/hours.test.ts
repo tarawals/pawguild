@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeHoursProblem, formatTimeOfDay, hoursProblem, localParts, summarizeHours, type OpeningHours } from "./hours";
+import { addDays, describeHoursProblem, formatTimeOfDay, hoursProblem, localParts, summarizeHours, zonedDateTime, type OpeningHours } from "./hours";
 
 const TZ = "America/New_York";
 const weekdays: OpeningHours[] = [1, 2, 3, 4, 5].map((weekday) => ({ weekday, opensAt: "07:00:00", closesAt: "19:00:00" }));
@@ -50,5 +50,19 @@ describe("wording", () => {
   it("summarizes the week", () => {
     expect(summarizeHours([])).toBe("No hours set");
     expect(summarizeHours(hours)).toBe("Mon–Fri 7:00 AM–7:00 PM · Sat 8:00 AM–5:00 PM · Sun closed");
+  });
+});
+
+describe("zonedDateTime", () => {
+  it("finds the instant for a local wall-clock time, across DST", () => {
+    expect(zonedDateTime("2027-03-13", "09:00", TZ).toISOString()).toBe("2027-03-13T14:00:00.000Z");
+    expect(zonedDateTime("2027-03-14", "09:00", TZ).toISOString()).toBe("2027-03-14T13:00:00.000Z");
+    expect(zonedDateTime("2026-11-01", "09:00", TZ).toISOString()).toBe("2026-11-01T14:00:00.000Z");
+    expect(zonedDateTime("2026-10-31", "23:30:00", TZ).toISOString()).toBe("2026-11-01T03:30:00.000Z");
+    expect(zonedDateTime("2026-07-01", "00:00", "Asia/Kolkata").toISOString()).toBe("2026-06-30T18:30:00.000Z");
+  });
+  it("adds calendar days", () => {
+    expect(addDays("2026-12-31", 1)).toBe("2027-01-01");
+    expect(addDays("2027-03-14", -7)).toBe("2027-03-07");
   });
 });

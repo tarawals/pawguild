@@ -80,3 +80,25 @@ export function summarizeHours(hours: readonly OpeningHours[]): string {
   const short = (w: number) => WEEKDAY_LABELS[w]!.slice(0, 3);
   return groups.map((g) => `${short(g.from)}${g.from === g.to ? "" : `–${short(g.to)}`} ${g.text}`).join(" · ");
 }
+
+/** The instant at which a location's wall clock shows `date` `time` (HH:MM), across DST changes. */
+export function zonedDateTime(date: string, time: string, timeZone: string): Date {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  const [h, mi] = hhmm(time).split(":").map(Number) as [number, number];
+  const naive = Date.UTC(y, m - 1, d, h, mi);
+  const offset = (at: number) => {
+    const p = localParts(new Date(at), timeZone);
+    const [py, pm, pd] = p.date.split("-").map(Number) as [number, number, number];
+    const [ph, pmi] = p.time.split(":").map(Number) as [number, number];
+    return Date.UTC(py, pm - 1, pd, ph, pmi) - Math.floor(at / 60_000) * 60_000;
+  };
+  let t = naive - offset(naive);
+  t = naive - offset(t);
+  return new Date(t);
+}
+
+/** Add whole calendar days to a YYYY-MM-DD date. */
+export function addDays(date: string, days: number): string {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}

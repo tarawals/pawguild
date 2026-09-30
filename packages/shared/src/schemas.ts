@@ -398,3 +398,36 @@ export const groomingScheduleQuery = z.object({
   date: isoDate,
   locationId: z.uuid().optional(),
 });
+
+const shiftFields = {
+  locationId: z.uuid(),
+  membershipId: z.uuid(),
+  startsAt: instant,
+  endsAt: instant,
+  note: optionalText(300),
+};
+const shiftLength = (s: { startsAt?: string; endsAt?: string }, ctx: z.RefinementCtx) => {
+  if (!s.startsAt || !s.endsAt) return;
+  const ms = Date.parse(s.endsAt) - Date.parse(s.startsAt);
+  if (ms <= 0) ctx.addIssue({ code: "custom", path: ["endsAt"], message: "The shift must end after it starts" });
+  else if (ms > 16 * 3_600_000) ctx.addIssue({ code: "custom", path: ["endsAt"], message: "A shift can be at most 16 hours" });
+};
+export const shiftInput = z.object(shiftFields).superRefine(shiftLength);
+export const shiftUpdateInput = z.object({
+  locationId: shiftFields.locationId.optional(),
+  membershipId: shiftFields.membershipId.optional(),
+  startsAt: instant.optional(),
+  endsAt: instant.optional(),
+  note: shiftFields.note,
+});
+export const shiftListQuery = z.object({
+  from: isoDate, to: isoDate, locationId: z.uuid().optional(), membershipId: z.uuid().optional(),
+})
+  .refine((r) => r.from <= r.to, { message: "The start date must be on or before the end date", path: ["to"] })
+  .refine((r) => (Date.parse(r.to) - Date.parse(r.from)) / 86_400_000 <= 42, { message: "Choose six weeks or less", path: ["to"] });
+export const copyWeekInput = z.object({
+  locationId: z.uuid(),
+  /** First day of the week to copy (any weekday; seven days from here are copied). */
+  fromWeekStart: isoDate,
+  toWeekStart: isoDate,
+}).refine((r) => r.fromWeekStart !== r.toWeekStart, { message: "Choose a different week to copy to", path: ["toWeekStart"] });

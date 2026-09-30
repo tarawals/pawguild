@@ -24,6 +24,7 @@ export const PERMISSIONS = [
   "billing:refund",
   "employees:read",
   "employees:manage",
+  "schedules:manage",
   "locations:manage",
   "settings:manage",
   "reports:read",
@@ -94,6 +95,7 @@ const MANAGER: readonly Permission[] = [
   "billing:refund",
   "reports:read",
   "audit:read",
+  "schedules:manage",
 ];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {

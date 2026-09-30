@@ -58,7 +58,15 @@ export const groomingRoutes: FastifyPluginAsync = async (app) => {
           .where("m.id", "in", missing).execute();
         columns.push(...extra.map((e) => ({ membershipId: e.membershipId, role: e.role, jobTitle: e.jobTitle, name: `${e.firstName} ${e.lastName} (inactive)` })));
       }
-      return { date, timeZone, location, groomers: columns, appointments };
+      // Each groomer's shifts at this location that day, so staff can see who is in and when.
+      const shifts = columns.length === 0 ? [] : await trx.selectFrom("shifts")
+        .select(["membershipId", "startsAt", "endsAt"])
+        .where("locationId", "=", location.id).where("membershipId", "in", columns.map((c) => c.membershipId))
+        .where("startsAt", "<", dayEnd).where("endsAt", ">", dayStart).orderBy("startsAt").execute();
+      return {
+        date, timeZone, location, appointments,
+        groomers: columns.map((c) => ({ ...c, shifts: shifts.filter((s) => s.membershipId === c.membershipId).map(({ startsAt, endsAt }) => ({ startsAt, endsAt })) })),
+      };
     });
   });
 

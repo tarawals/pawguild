@@ -84,12 +84,23 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
 
       const outstanding = req.auth.permissions.has("billing:read") ? await billingSummary(trx) : null;
 
+      // Staff on shift today (any shift overlapping the organization's local day).
+      const workingToday = await trx.selectFrom("shifts as s")
+        .innerJoin("memberships as m", "m.id", "s.membershipId").innerJoin("users as u", "u.id", "m.userId")
+        .innerJoin("locations as l", "l.id", "s.locationId")
+        .select(["s.id", "s.startsAt", "s.endsAt", "s.note", "s.membershipId", "m.role", "l.name as locationName"])
+        .select(sql<string>`u.first_name || ' ' || u.last_name`.as("staffName"))
+        .where("s.startsAt", "<", sql<Date>`((${today}) + 1)::timestamp at time zone ${timezone}`)
+        .where("s.endsAt", ">", sql<Date>`(${today})::timestamp at time zone ${timezone}`)
+        .orderBy("s.startsAt").orderBy("staffName").limit(100).execute();
+
       return {
         ...counts,
         outstanding,
         medicationDue,
         openIncidents,
         occupancy: occupancyByLocation,
+        workingToday,
         arrivals: arrivalsWithChecks,
         departures,
         vaccinationAlerts: vaccinationAlerts.map(({ firstName, lastName, ...v }) => ({
