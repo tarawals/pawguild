@@ -51,10 +51,10 @@ describe("recurring reservations", () => {
     const { occurrences, bookable } = res.json();
     const skipped = Object.fromEntries(occurrences.filter((o: { ok: boolean }) => !o.ok).map((o: { date: string; reason: string }) => [o.date, o.reason]));
     expect(Object.keys(skipped)).toEqual(["2027-01-09", "2027-01-13", "2027-01-16", "2027-01-18", "2027-01-22", "2027-01-23", "2027-01-30"]);
-    expect(skipped["2027-01-09"]).toMatch(/closed on Saturdays/);
-    expect(skipped["2027-01-13"]).toMatch(/^Daycare is full for this day/);
-    expect(skipped["2027-01-18"]).toMatch(/closed that day \(MLK Day\)/);
-    expect(skipped["2027-01-22"]).toMatch(/^Pip already has a reservation during this time/);
+    expect(skipped["2027-01-09"]).toBe("The location is closed on Saturdays.");
+    expect(skipped["2027-01-13"]).toBe("Daycare is full for this day: Jan 13 (1/1 booked).");
+    expect(skipped["2027-01-18"]).toBe("The location is closed that day (MLK Day).");
+    expect(skipped["2027-01-22"]).toBe("Pip already has a reservation during this time.");
     expect(bookable).toBe(9);
     expect(occurrences[0]).toMatchObject({ date: "2027-01-04", startsAt: "2027-01-04T12:30:00.000Z", endsAt: "2027-01-04T23:00:00.000Z", ok: true });
     expect(await count()).toBe(before);

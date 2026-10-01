@@ -191,6 +191,14 @@ this session. The app role may update only `name`, `email`, `phone` and `timezon
 Notifications (`/api/notifications`) add no tables: they're computed from live records on each
 request, so they clear as soon as the underlying problem is dealt with.
 
+## 0014_reservation_series
+
+`reservation_series` records a repeating pattern (customer, location, service, `weekdays`
+`smallint[]` with 0 = Sunday, `start_time`/`end_time`, `first_date`/`last_date` up to 183 days
+apart). Each occurrence is an ordinary `reservations` row with `series_id` (composite FK), created
+by the same code as a single booking, so every check, care record, invoice and report treats it
+normally. Series rows are insert-only; cancelling "this and following" cancels the occurrences.
+
 ## Conventions
 
 - Money: `bigint` integer cents (see ADR 0003). Never `numeric` or float in application code.

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { describeHoursProblem, estimateReservation, formatMoney, hoursProblem, PRICE_UNIT_LABELS, summarizeHours, type PriceUnit } from "@pawguild/shared";
+import { describeHoursProblem, estimateReservation, formatMoney, hoursProblem, PRICE_UNIT_LABELS, summarizeHours, WEEKDAY_LABELS, type PriceUnit } from "@pawguild/shared";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
@@ -7,7 +7,12 @@ import {
 } from "../api";
 import { useCan, useMe } from "../auth";
 import { Checkbox, ErrorAlert, fieldErrors, Loading, PageHeader, Panel, SelectField, TextArea, TextField } from "../components/ui";
-import { formatDate, fromLocalInput, toLocalInput } from "../units";
+import { formatDate, formatTime, fromLocalInput, toLocalInput } from "../units";
+
+interface SeriesResult {
+  occurrences: { date: string; startsAt: string; endsAt: string; ok: boolean; reason?: string; reservationId?: string }[];
+  bookable: number;
+}
 
 /** Sensible default times for a new booking, by service category. */
 function defaultTimes(service: Service | undefined, day: Date): { start: string; end: string } {
@@ -128,7 +133,32 @@ export function ReservationFormPage() {
       navigate(`/reservations/${r.id}`);
     },
   });
-  const err = fieldErrors(save.error);
+  // Repeating bookings (same-day services only).
+  const canRepeat = !editing && Boolean(service) && service?.priceUnit !== "per_night";
+  const [repeat, setRepeat] = useState(false);
+  const [weekdays, setWeekdays] = useState<number[]>([]);
+  const [rFrom, setRFrom] = useState(() => toLocalInput(new Date()).slice(0, 10));
+  const [rUntil, setRUntil] = useState(() => toLocalInput(new Date(Date.now() + 27 * 86_400_000)).slice(0, 10));
+  const repeating = canRepeat && repeat;
+  const seriesBody = () => ({
+    customerId, locationId, serviceId, petIds, weekdays, notes, status: confirmNow ? "confirmed" : "pending",
+    startTime: start.slice(11, 16), endTime: end.slice(11, 16), firstDate: rFrom, lastDate: rUntil,
+    ...(isGrooming && groomerId && { groomerMembershipId: groomerId }),
+  });
+  const bodyKey = JSON.stringify(seriesBody());
+  const preview = useMutation({
+    mutationFn: () => post<SeriesResult>("/api/reservation-series/preview", seriesBody()).then((r) => ({ ...r, key: bodyKey })),
+  });
+  const bookSeries = useMutation({
+    mutationFn: () => post<SeriesResult & { seriesId: string }>("/api/reservation-series", seriesBody()),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["reservations"] }); qc.invalidateQueries({ queryKey: ["dashboard"] });
+      const first = r.occurrences.find((o) => o.reservationId);
+      navigate(first ? `/reservations/${first.reservationId}` : `/customers/${customerId}`);
+    },
+  });
+  const previewFresh = preview.data && preview.data.key === bodyKey;
+  const err = fieldErrors(repeating ? (bookSeries.error ?? preview.error) : save.error);
   const capacityFull = save.error instanceof ApiError && save.error.code === "capacity_full";
   const outsideHours = save.error instanceof ApiError && save.error.code === "outside_hours";
   const location = locations.data?.items.find((l) => l.id === (editing ? existing.data?.location.id : locationId));
@@ -158,7 +188,12 @@ export function ReservationFormPage() {
   if (loadError) return <ErrorAlert error={loadError} />;
   const c = customer.data!;
 
-  function onSubmit(e: FormEvent) { e.preventDefault(); save.mutate(); }
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!repeating) save.mutate();
+    else if (previewFresh) bookSeries.mutate();
+    else preview.mutate();
+  }
   function chooseService(sid: string) {
     setServiceId(sid);
     const s = services.data?.items.find((x) => x.id === sid);
@@ -174,7 +209,7 @@ export function ReservationFormPage() {
         title={editing ? "Edit reservation" : "New reservation"}
         description={<>For <Link to={`/customers/${c.id}`}>{c.firstName} {c.lastName}</Link>{editing && ` · ${existing.data!.service.name} at ${existing.data!.location.name}`}</>}
       />
-      <ErrorAlert error={save.error} />
+      <ErrorAlert error={repeating ? (bookSeries.error ?? preview.error) : save.error} />
       {activePets.length === 0 && <div className="alert alert-warning">This customer has no active pets. <Link to={`/customers/${c.id}/pets/new`}>Add a pet</Link> first.</div>}
       <form className="stack" onSubmit={onSubmit} noValidate>
         {!editing && (
@@ -208,17 +243,36 @@ export function ReservationFormPage() {
         </fieldset>
         <fieldset>
           <legend>When</legend>
+          {canRepeat && <Checkbox label="Repeat on a schedule (e.g. every Mon, Wed and Fri)" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} />}
+          {repeating ? (
+            <div className="stack" style={{ gap: 12, marginTop: 8 }}>
+              <div role="group" aria-label="Repeat on" className="pet-picker">
+                {[1, 2, 3, 4, 5, 6, 0].map((w) => (
+                  <Checkbox key={w} label={WEEKDAY_LABELS[w]!} checked={weekdays.includes(w)}
+                    onChange={(e) => setWeekdays((d) => e.target.checked ? [...d, w] : d.filter((x) => x !== w))} />
+                ))}
+              </div>
+              {err("weekdays") && <p className="field error" style={{ color: "var(--danger)", margin: 0 }}>{err("weekdays")}</p>}
+              <div className="form-grid">
+                <TextField label="Drop-off time" type="time" value={start.slice(11, 16)} onChange={(e) => setStart(`${(start || rFrom + "T").slice(0, 11)}${e.target.value}`)} />
+                <TextField label="Pick-up time" type="time" value={end.slice(11, 16)} onChange={(e) => setEnd(`${(end || rFrom + "T").slice(0, 11)}${e.target.value}`)} error={err("endTime")} />
+                <TextField label="From" type="date" value={rFrom} onChange={(e) => setRFrom(e.target.value)} error={err("firstDate")} />
+                <TextField label="Until" type="date" value={rUntil} min={rFrom} onChange={(e) => setRUntil(e.target.value)} error={err("lastDate")} />
+              </div>
+            </div>
+          ) : (
           <div className="form-grid">
             <TextField label="Drop-off" type="datetime-local" required value={start} onChange={(e) => setStart(e.target.value)} error={err("startsAt")} />
             <TextField label="Pick-up" type="datetime-local" required value={end} onChange={(e) => setEnd(e.target.value)} error={err("endsAt")} />
           </div>
+          )}
           {location && (location.hours.length > 0 || location.closures.length > 0) && (
             <p className="muted" style={{ margin: "8px 0 0" }}>
               {location.name}: {summarizeHours(location.hours)}
               {location.closures.length > 0 && <> · Closed {location.closures.slice(0, 3).map((c) => formatDate(c.closedOn)).join(", ")}{location.closures.length > 3 && ", …"}</>}
             </p>
           )}
-          {hoursWarnings.length > 0 && !outsideHours && (
+          {!repeating && hoursWarnings.length > 0 && !outsideHours && (
             <div className="alert alert-warning" role="status" style={{ margin: "8px 0 0" }}>{hoursWarnings.join(". ")}.</div>
           )}
         </fieldset>
@@ -241,7 +295,20 @@ export function ReservationFormPage() {
           </SelectField>
         )}
         <TextArea label="Reservation notes" hint="Visible to staff." value={notes} onChange={(e) => setNotes(e.target.value)} error={err("notes")} />
-        {estimate && (
+        {repeating && previewFresh && preview.data && (
+          <section className="panel" aria-labelledby="series-preview-title">
+            <div className="panel-header"><h2 id="series-preview-title">{preview.data.bookable} of {preview.data.occurrences.length} dates can be booked</h2></div>
+            <ul style={{ listStyle: "none", margin: 0, padding: "4px 16px", maxHeight: 320, overflowY: "auto" }} aria-label="Dates">
+              {preview.data.occurrences.map((o) => (
+                <li key={o.date} className="dose">
+                  <span>{o.ok ? "✓" : "✗"} <strong>{formatDate(o.date)}</strong> {formatTime(o.startsAt)}–{formatTime(o.endsAt)}</span>
+                  {o.ok ? <span className="badge badge-success">Will be booked</span> : <span className="muted" style={{ flexBasis: "100%" }}>Skipped: {o.reason}</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {!repeating && estimate && (
           <div className="estimate" aria-live="polite">
             <span>{estimate.quantity} {PRICE_UNIT_LABELS[estimate.unit].replace("per ", "")}{estimate.quantity === 1 ? "" : "s"} × {estimate.petCount} pet{estimate.petCount === 1 ? "" : "s"} × {formatMoney(estimate.unitPriceCents)}</span>
             <span>Estimated <strong>{formatMoney(estimate.totalCents)}</strong></span>
@@ -259,9 +326,15 @@ export function ReservationFormPage() {
         )}
         {!editing && <Checkbox label="Mark as confirmed" checked={confirmNow} onChange={(e) => setConfirmNow(e.target.checked)} />}
         <div className="actions">
+          {repeating ? (
+            <button className="btn btn-primary" type="submit" disabled={preview.isPending || bookSeries.isPending || activePets.length === 0 || (previewFresh && preview.data!.bookable === 0)}>
+              {preview.isPending ? "Checking…" : bookSeries.isPending ? "Booking…" : previewFresh ? `Book ${preview.data!.bookable} date${preview.data!.bookable === 1 ? "" : "s"}` : "Check dates"}
+            </button>
+          ) : (
           <button className="btn btn-primary" type="submit" disabled={save.isPending || activePets.length === 0}>
             {save.isPending ? "Saving…" : editing ? "Save changes" : "Create reservation"}
           </button>
+          )}
           <Link className="btn" to={editing ? `/reservations/${id}` : `/customers/${c.id}`}>Cancel</Link>
         </div>
       </form>

@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-09-30 (session 15: business settings and notifications)_
+_Last updated: 2026-10-01 (session 16: recurring reservations)_
 
 ## Built and tested
 
@@ -34,6 +34,7 @@ _Last updated: 2026-09-30 (session 15: business settings and notifications)_
 | **Staff scheduling** (shifts per person and location; week grid; add/edit/delete; copy last week keeping local times across DST and reporting skipped shifts; no overlapping shifts for one person; shifts outside business hours allowed but flagged; "Working today" on the dashboard; each groomer's shift and appointments outside it on the grooming schedule) | ✅ | ✅ | everyone signed in views; `schedules:manage` (managers and above) changes | Staff schedule page; dashboard panel; grooming schedule | unit (DST) + integration (incl. races, tenant isolation) + e2e |
 | **Business settings** (organization name, email, phone, time zone; confirmation explaining what a time-zone change affects; currency fixed) | ✅ + RLS split | ✅ | view: signed in; edit: `settings:manage` (owner, administrator) | Business settings page | integration (incl. direct RLS check) + e2e |
 | **Internal notifications** (overdue medication, pets past pick-up, arrivals needing vaccinations, unconfirmed bookings in the next 48h, grooming without a groomer, serious or follow-up incidents, over capacity, overpaid invoices, open days with nobody scheduled; each shown only to roles that can act; computed live, clears itself) | — (derived) | ✅ | signed in; items filtered by permission | Notifications page; count in the top bar (rechecks every minute and after every change) | integration + e2e |
+| **Recurring reservations** (same-day services on chosen weekdays between two dates, up to six months or 100 dates; preview runs the real booking checks per date and lists skipped dates with a short reason; times stay local across DST; "cancel this and following" with one reason) | ✅ | ✅ | `reservations:write` to book and cancel; `reservations:read` to view | "Repeat on a schedule" on the booking form; Repeating booking panel on reservations | unit + integration + e2e |
 | **Sign-in throttling** (per email and per network address; same response for unknown emails) | ✅ | ✅ | — | Server message on sign-in page | integration |
 | **Session-ended handling** (back to sign-in with notice, then return to the same page; same-site redirects only) | — | — | — | ✅ | e2e |
 | Dashboard (outstanding balances and overpaid invoices, medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
@@ -41,21 +42,22 @@ _Last updated: 2026-09-30 (session 15: business settings and notifications)_
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results (2026-09-30): typecheck ✅, 49 shared unit tests ✅, 178 API integration tests ✅,
-7 web tests ✅, 45 Playwright e2e tests ✅.
+Latest check results (2026-10-01): typecheck ✅, 50 shared unit tests ✅, 185 API integration tests ✅,
+7 web tests ✅, 46 Playwright e2e tests ✅ (two full runs in a row).
+Fixed this session: signing out could land on "Your session ended" instead of the sign-in page when a
+background request (e.g. the notifications check) was refused mid-sign-out.
 
 ## Not built yet (in scope, by priority)
 
-1. Recurring reservations (e.g. daycare every Mon/Wed/Fri)
-2. Packages and memberships (prepaid daycare days)
-3. More reports (e.g. tax by rate, staff activity), internal notifications, business settings UI
-4. Waitlists, pet photos
+1. Packages and memberships (prepaid daycare days)
+2. More reports (e.g. tax by rate, staff activity), internal notifications, business settings UI
+3. Waitlists, pet photos
 
 ## Test coverage beyond feature tests
 
 - `auth-hardening.test.ts`: sign-in for every role, identical errors, cookie flags, expiry, revocation, tampering, deactivation, immediate role changes, injection attempts
 - `throttle.test.ts`: lockout per email and per address, reset on success, window expiry, no enumeration
-- `permissions-matrix.test.ts`: all 10 roles × 57 protected actions against the role map, and no action returns 500
+- `permissions-matrix.test.ts`: all 10 roles × 61 protected actions against the role map, and no action returns 500
 - `money-invariants.test.ts`: 40 randomized billing scenarios × 15 operations that must reconcile after every step, plus simultaneous-request races (payments, credit, refunds, invoice numbers, last capacity space, same pet)
 - `edge-cases.test.ts`: empty updates, markup/unicode, oversized input, unknown ids
 - Browser: `login.spec.ts` (every role, deep links, sign-out, session ending mid-use, safe redirects) and `full-day.spec.ts` (a full visit across three staff members)
@@ -99,6 +101,9 @@ Latest check results (2026-09-30): typecheck ✅, 49 shared unit tests ✅, 178 
 - The `users` table has no RLS. Any future user listing must join through `memberships`.
 - The permission map is code-defined.
 - There is no production deployment configuration and no CI.
+- A repeating booking can't be edited as a whole: change single occurrences, or cancel the rest and
+  book a new series. Overnight (per-night) services can't repeat. Dates that fail a check are
+  skipped, never overridden; book those one at a time with a manager override if needed.
 - Notifications have no read or snooze state: an item stays until the problem is resolved. There is
   no email, text or push delivery (in-app only, per current scope).
 - Changing the business time zone doesn't move existing bookings (they keep their exact times),
@@ -117,8 +122,8 @@ Latest check results (2026-09-30): typecheck ✅, 49 shared unit tests ✅, 178 
 
 ## Next recommended step
 
-**Recurring reservations:** book a repeating daycare pattern (e.g. Mon/Wed/Fri, 7:30 AM–6 PM, for
-the next N weeks) as individual reservations linked by a series id. Each occurrence goes through
-the same checks (pet double-booking, capacity, business hours and closures), and the booking
-screen previews which dates will be booked or skipped and why. Cancelling "this and following"
-cancels the remaining occurrences with one reason. Tests should cover DST, closures and capacity.
+**Packages (prepaid daycare days):** sell a package (e.g. 10 days of daycare for $340) as an
+invoice line; the customer's balance of days is used up when daycare is invoiced, instead of
+charging the day rate. Needs decisions before building: whether packages expire, whether unused
+days can be refunded, and whether a package covers half days. Memberships (recurring monthly fees)
+would follow.

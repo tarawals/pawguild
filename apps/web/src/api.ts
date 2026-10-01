@@ -136,6 +136,7 @@ export interface Reservation {
   service: { id: string; name: string; category: string };
   location: { id: string; name: string };
   groomer: { membershipId: string; name: string } | null;
+  series: { id: string; weekdays: number[]; startTime: string; endTime: string; firstDate: string; lastDate: string; upcoming: number } | null;
   pets: {
     id: string; name: string; species: string; breed: string | null; allergies: string | null; medicalNotes: string | null;
     resourceId: string | null; resourceName: string | null;

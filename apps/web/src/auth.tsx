@@ -45,9 +45,16 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return <MeContext.Provider value={me.data}>{children}</MeContext.Provider>;
 }
 
+let signingOut = false;
+/** True from the moment someone clicks Sign out, so in-flight requests refused with 401 don't
+ * send them to the "session ended" page instead of the normal sign-in page. */
+export const isSigningOut = () => signingOut;
+
 export function useLogout() {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: ["logout"],
+    onMutate: async () => { signingOut = true; await qc.cancelQueries(); },
     mutationFn: () => post("/api/auth/logout"),
     onSettled: () => {
       qc.clear();

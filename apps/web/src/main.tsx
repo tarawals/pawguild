@@ -2,7 +2,7 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@ta
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
-import { RequireAuth } from "./auth";
+import { isSigningOut, RequireAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { CapacityPage } from "./pages/Capacity";
 import { ChangePasswordPage } from "./pages/ChangePassword";
@@ -39,7 +39,7 @@ import "./styles.css";
  */
 function onApiError(err: unknown, query?: { queryKey: readonly unknown[] }) {
   // The "me" check is handled by <RequireAuth>, which sends never-signed-in visitors to sign-in.
-  if (query?.queryKey[0] === "me") return;
+  if (query?.queryKey[0] === "me" || isSigningOut()) return;
   if (err instanceof ApiError && err.status === 401 && window.location.pathname !== "/login") {
     queryClient.clear();
     const from = window.location.pathname + window.location.search;
@@ -52,7 +52,11 @@ const queryClient: QueryClient = new QueryClient({
   mutationCache: new MutationCache({
     onError: (err) => onApiError(err),
     // Almost any change can resolve (or cause) a notification, so recheck after every change.
-    onSettled: () => { void queryClient.invalidateQueries({ queryKey: ["notifications"] }); },
+    // (Not after signing out: there's no session left to ask with.)
+    onSettled: (_data, _err, _vars, _ctx, mutation) => {
+      if (mutation.options.mutationKey?.[0] === "logout") return;
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
   }),
   defaultOptions: {
     queries: {

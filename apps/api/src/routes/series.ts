@@ -8,7 +8,8 @@
  * shows is what booking would do (at that moment).
  */
 import {
-  hhmm, localParts, MAX_SERIES_OCCURRENCES, reservationSeriesInput, seriesCancelInput, seriesDates, zonedDateTime,
+  formatTimeOfDay, hhmm, localParts, MAX_SERIES_OCCURRENCES, reservationSeriesInput, seriesCancelInput, seriesDates, WEEKDAY_LABELS,
+  zonedDateTime, type HoursProblem,
 } from "@pawguild/shared";
 import type { FastifyPluginAsync } from "fastify";
 import { sql } from "kysely";
@@ -24,9 +25,18 @@ import { createReservation } from "./reservations";
 type Input = z.output<typeof reservationSeriesInput>;
 interface Occurrence { date: string; startsAt: string; endsAt: string; ok: boolean; reason?: string; reservationId?: string }
 
+/** A short reason for skipping a date: the first problem only, without advice about overrides. */
 function reasonOf(e: AppError): string {
   const fields = Array.isArray(e.details) ? (e.details as { message: string }[]) : [];
-  return fields[0]?.message ?? e.message;
+  if (fields[0]) return fields[0].message;
+  if (e.code === "outside_hours") {
+    const p = (e.details as { problems: HoursProblem[] }).problems[0]!;
+    if (p.kind === "closure") return `The location is closed that day${p.reason ? ` (${p.reason})` : ""}.`;
+    if (p.kind === "closed_day") return `The location is closed on ${WEEKDAY_LABELS[p.weekday]}s.`;
+    return `${p.time < p.opensAt ? "Before opening" : "After closing"} (open ${formatTimeOfDay(p.opensAt)}–${formatTimeOfDay(p.closesAt)}).`;
+  }
+  // Keep the first sentence ("Daycare is full for this day: …", "Pip already has a reservation …").
+  return e.message.split(/(?<=\.)\s+(?=[A-Z])/)[0]!;
 }
 
 async function runSeries(trx: Tx, auth: AuthContext, input: Input, mode: "preview" | "create") {

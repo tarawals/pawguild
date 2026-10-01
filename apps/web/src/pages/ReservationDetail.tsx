@@ -8,6 +8,7 @@ import { CareLogPanel } from "../components/CareLogPanel";
 import { CheckInPanel } from "../components/CheckInPanel";
 import { CheckOutPanel } from "../components/CheckOutPanel";
 import { KennelAssignment } from "../components/KennelAssignment";
+import { SeriesPanel } from "../components/SeriesPanel";
 import { StatusActions } from "../components/StatusActions";
 import { ErrorAlert, Loading, PageHeader, Panel, ReservationStatusBadge } from "../components/ui";
 import { formatDateTime, formatRange, toLocalInput } from "../units";
@@ -38,6 +39,7 @@ export function ReservationDetailPage() {
       <div className="grid-2">
         <div className="stack">
           {alerts.length > 0 && <section aria-label="Care alerts">{alerts.map((a) => <div key={a.key} className="care-flag"><strong>{a.title}</strong>{a.text}</div>)}</section>}
+          <SeriesPanel reservation={r} />
           <CheckInPanel reservation={r} />
           <CheckOutPanel reservation={r} />
           <KennelAssignment reservation={r} />
