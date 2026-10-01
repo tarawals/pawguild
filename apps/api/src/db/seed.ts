@@ -49,7 +49,13 @@ export async function seed(connectionString: string, password: string) {
         { organizationId: org.id, name: "Full Groom", category: "grooming", priceCents: 8500, priceUnit: "per_visit", durationMinutes: 120, isTaxable: true },
         { organizationId: org.id, name: "Bath & Brush", category: "grooming", priceCents: 4000, priceUnit: "per_visit", durationMinutes: 60, isTaxable: true },
         { organizationId: org.id, name: "Nail Trim", category: "add_on", priceCents: 1500, priceUnit: "per_visit", durationMinutes: 15, isTaxable: true },
-      ]).returning(["id", "category"]).execute();
+      ]).returning(["id", "category", "name"]).execute();
+      // Billing rules: boarding per night (daytime included); daycare is a half day up to 5 hours.
+      await trx.insertInto("billingSettings").values({
+        organizationId: org.id,
+        daycareFullServiceId: services.find((s) => s.name === "Daycare — Full Day")!.id,
+        daycareHalfServiceId: services.find((s) => s.name === "Daycare — Half Day")!.id,
+      }).execute();
       // Typical requirements: daycare/boarding need core vaccines plus Bordetella; grooming needs Rabies.
       const requirement = (serviceId: string, species: string, vaccine: string) => ({ organizationId: org.id, serviceId, species, vaccine });
       await trx.insertInto("serviceVaccineRequirements").values(services.flatMap((s) =>

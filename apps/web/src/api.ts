@@ -148,7 +148,10 @@ export interface Reservation {
     checks: { vaccine: string; state: "current" | "missing" | "expired" | "expires_during_stay"; expiresOn: string | null }[];
   }[];
   allowedTransitions: string[];
-  estimate: { quantity: number; petCount: number; unitPriceCents: number; totalCents: number };
+  estimate: {
+    quantity: number; petCount: number; unitPriceCents: number; totalCents: number;
+    lines: { kind: string; description: string; units: number; petCount: number; unitPriceCents: number; discountCents: number; amountCents: number }[];
+  };
 }
 
 export interface DashboardSummary {

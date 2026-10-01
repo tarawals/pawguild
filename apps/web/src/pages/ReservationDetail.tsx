@@ -8,6 +8,7 @@ import { CareLogPanel } from "../components/CareLogPanel";
 import { CheckInPanel } from "../components/CheckInPanel";
 import { CheckOutPanel } from "../components/CheckOutPanel";
 import { KennelAssignment } from "../components/KennelAssignment";
+import { EstimateLines } from "../components/EstimateLines";
 import { SeriesPanel } from "../components/SeriesPanel";
 import { StatusActions } from "../components/StatusActions";
 import { ErrorAlert, Loading, PageHeader, Panel, ReservationStatusBadge } from "../components/ui";
@@ -71,12 +72,10 @@ export function ReservationDetailPage() {
           </Panel>
           <BillingPanel reservation={r} />
           <Panel title="Estimated charges">
-            <dl className="details">
-              <dt>Rate</dt><dd>{formatMoney(r.unitPriceCents)} {PRICE_UNIT_LABELS[r.priceUnit as PriceUnit]}</dd>
-              <dt>Quantity</dt><dd>{r.estimate.quantity} × {r.estimate.petCount} pet{r.estimate.petCount === 1 ? "" : "s"}</dd>
-              <dt>Estimate</dt><dd><strong>{formatMoney(r.estimate.totalCents)}</strong></dd>
-            </dl>
-            <p className="muted" style={{ margin: "12px 0 0", fontSize: "0.875rem" }}>Before tax, discounts and add-ons. The rate is locked at the price when booked.</p>
+            <EstimateLines estimate={r.estimate} />
+            <p className="muted" style={{ margin: "12px 0 0", fontSize: "0.875rem" }}>
+              Before tax and anything added to the invoice. Booked at {formatMoney(r.unitPriceCents)} {PRICE_UNIT_LABELS[r.priceUnit as PriceUnit]}; charged under the business's billing rules.
+            </p>
           </Panel>
         </div>
       </div>

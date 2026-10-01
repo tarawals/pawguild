@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { describeHoursProblem, estimateReservation, formatMoney, hoursProblem, PRICE_UNIT_LABELS, summarizeHours, WEEKDAY_LABELS, type PriceUnit } from "@pawguild/shared";
+import { describeHoursProblem, formatMoney, priceStay, type BillingRules, hoursProblem, PRICE_UNIT_LABELS, summarizeHours, WEEKDAY_LABELS, type PriceUnit } from "@pawguild/shared";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
@@ -100,13 +100,25 @@ export function ReservationFormPage() {
   useEffect(() => { if (!editing && activePets.length === 1) setPetIds([activePets[0]!.id]); }, [editing, activePets]);
   useEffect(() => { if (!locationId && locations.data?.items.length === 1) setLocationId(locations.data.items[0]!.id); }, [locations.data, locationId]);
 
+  // Estimated with the same pricing engine and billing rules the invoice will use.
+  const billingRules = useQuery({ queryKey: ["settings", "billing"], queryFn: () => get<BillingRules>("/api/settings/billing") });
   const estimate = useMemo(() => {
     const s = fromLocalInput(start); const e = fromLocalInput(end);
     const unit = (editing ? existing.data?.priceUnit : service?.priceUnit) as PriceUnit | undefined;
     const price = editing ? existing.data?.unitPriceCents : service?.priceCents;
-    if (!s || !e || !unit || price == null || petIds.length === 0 || new Date(e) <= new Date(s)) return null;
-    return { unit, ...estimateReservation({ unit, unitPriceCents: price, startsAt: new Date(s), endsAt: new Date(e), petCount: petIds.length, timeZone: me.organization.timezone }) };
-  }, [start, end, service, petIds, existing.data, editing, me.organization.timezone]);
+    const rules = billingRules.data;
+    if (!s || !e || !unit || !service || !rules || price == null || petIds.length === 0 || new Date(e) <= new Date(s)) return null;
+    const find = (id: string | null) => {
+      const x = services.data?.items.find((v) => v.id === id);
+      return x ? { id: x.id, name: x.name, category: x.category, priceUnit: x.priceUnit as PriceUnit, priceCents: x.priceCents } : null;
+    };
+    const loc = locations.data?.items.find((l) => l.id === (editing ? existing.data?.location.id : locationId));
+    return priceStay({
+      rules, service: { id: service.id, name: service.name, category: service.category, priceUnit: unit, priceCents: price },
+      daycareFull: find(rules.daycareFullServiceId), daycareHalf: find(rules.daycareHalfServiceId),
+      startsAt: new Date(s), endsAt: new Date(e), petCount: petIds.length, timeZone: loc?.effectiveTimezone ?? me.organization.timezone,
+    });
+  }, [start, end, service, services.data, petIds, existing.data, editing, me.organization.timezone, billingRules.data, locations.data, locationId]);
 
   const save = useMutation({
     mutationFn: () => {
@@ -309,8 +321,8 @@ export function ReservationFormPage() {
           </section>
         )}
         {!repeating && estimate && (
-          <div className="estimate" aria-live="polite">
-            <span>{estimate.quantity} {PRICE_UNIT_LABELS[estimate.unit].replace("per ", "")}{estimate.quantity === 1 ? "" : "s"} × {estimate.petCount} pet{estimate.petCount === 1 ? "" : "s"} × {formatMoney(estimate.unitPriceCents)}</span>
+          <div className="estimate" aria-live="polite" style={{ flexWrap: "wrap" }}>
+            <span>{estimate.lines.map((l) => `${l.description}${l.petCount > 1 ? ` × ${l.petCount} pets` : ""}`).join(" + ")}</span>
             <span>Estimated <strong>{formatMoney(estimate.totalCents)}</strong></span>
           </div>
         )}
