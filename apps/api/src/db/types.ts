@@ -195,6 +195,7 @@ export interface ReservationsTable {
   createdAt: CreatedAt;
   updatedAt: Generated<Date>;
   groomerMembershipId: string | null;
+  seriesId: string | null;
 }
 
 export interface ReservationPetsTable {
@@ -234,6 +235,23 @@ export interface ShiftsTable {
   createdByUserId: string;
   createdAt: CreatedAt;
   updatedAt: Generated<Date>;
+}
+
+export interface ReservationSeriesTable {
+  id: Generated<string>;
+  organizationId: string;
+  customerId: string;
+  locationId: string;
+  serviceId: string;
+  weekdays: number[];
+  /** TIME columns are returned as 'HH:MM:SS' strings. */
+  startTime: string;
+  endTime: string;
+  firstDate: DateString;
+  lastDate: DateString;
+  notes: string | null;
+  createdByUserId: string;
+  createdAt: CreatedAt;
 }
 
 export interface LocationCapacitiesTable {
@@ -448,6 +466,7 @@ export interface Database {
   locationCapacities: LocationCapacitiesTable;
   locationHours: LocationHoursTable;
   shifts: ShiftsTable;
+  reservationSeries: ReservationSeriesTable;
   locationClosures: LocationClosuresTable;
   resources: ResourcesTable;
   serviceVaccineRequirements: ServiceVaccineRequirementsTable;

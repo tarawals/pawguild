@@ -439,3 +439,35 @@ export const organizationSettingsInput = z.object({
   phone: optionalText(40),
   timezone: z.string().trim().refine(isValidTimeZone, "Choose a time zone from the list"),
 });
+
+export const MAX_SERIES_OCCURRENCES = 100;
+export const reservationSeriesInput = z.object({
+  customerId: z.uuid(),
+  locationId: z.uuid(),
+  serviceId: z.uuid(),
+  petIds: z.array(z.uuid()).min(1, "Choose at least one pet").max(20)
+    .refine((ids) => new Set(ids).size === ids.length, "A pet can only be added once"),
+  /** 0 = Sunday. */
+  weekdays: z.array(z.number().int().min(0).max(6)).min(1, "Choose at least one day")
+    .refine((d) => new Set(d).size === d.length, "Each day can only be chosen once"),
+  startTime: timeOfDay,
+  endTime: timeOfDay,
+  firstDate: isoDate,
+  lastDate: isoDate,
+  notes: optionalText(5000),
+  status: z.enum(["pending", "confirmed"]).default("confirmed"),
+  groomerMembershipId: z.uuid().nullable().optional(),
+}).superRefine((v, ctx) => {
+  if (v.endTime <= v.startTime) ctx.addIssue({ code: "custom", path: ["endTime"], message: "Pick-up must be after drop-off on the same day" });
+  if (v.lastDate < v.firstDate) ctx.addIssue({ code: "custom", path: ["lastDate"], message: "The last date must be on or after the first" });
+  else if ((Date.parse(v.lastDate) - Date.parse(v.firstDate)) / 86_400_000 > 183) {
+    ctx.addIssue({ code: "custom", path: ["lastDate"], message: "A series can run for up to six months" });
+  }
+});
+export type ReservationSeriesInput = z.input<typeof reservationSeriesInput>;
+
+export const seriesCancelInput = z.object({
+  /** Cancel occurrences on or after this local date. */
+  fromDate: isoDate,
+  reason: z.string().trim().min(1, "Give a reason for cancelling").max(1000),
+});

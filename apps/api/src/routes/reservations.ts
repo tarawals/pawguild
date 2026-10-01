@@ -1,6 +1,6 @@
 import {
   assignmentsInput, isCapacityCategory, allowedTransitions, canTransition, estimateReservation, RESERVATION_STATUS_LABELS,
-  reservationInput, reservationListQuery, reservationStatusInput, reservationUpdateInput,
+  reservationInput, reservationListQuery, type ReservationInput, reservationStatusInput, reservationUpdateInput,
   type PriceUnit, type ReservationStatus,
 } from "@pawguild/shared";
 import type { FastifyPluginAsync } from "fastify";
@@ -70,7 +70,7 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     .select([
       "r.id", "r.status", "r.startsAt", "r.endsAt", "r.unitPriceCents", "r.priceUnit", "r.notes",
       "r.confirmedAt", "r.checkedInAt", "r.checkedOutAt", "r.cancelledAt", "r.cancellationReason",
-      "r.createdAt", "r.updatedAt", "r.customerId", "r.serviceId", "r.locationId", "r.groomerMembershipId",
+      "r.createdAt", "r.updatedAt", "r.customerId", "r.serviceId", "r.locationId", "r.groomerMembershipId", "r.seriesId",
       "c.firstName", "c.lastName", "c.phone", "s.name as serviceName", "s.category as serviceCategory",
       "l.name as locationName", "l.timezone as locationTimezone",
     ])
@@ -81,6 +81,13 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     .select(["p.id", "p.name", "p.species", "p.breed", "p.allergies", "p.medicalNotes", "rp.resourceId", "res.name as resourceName"])
     .where("rp.reservationId", "=", id).orderBy("p.name").execute();
   const vaccinationCheck = (await reservationVaccinationChecks(trx, [id])).get(id) ?? [];
+  const seriesRow = r.seriesId ? await trx.selectFrom("reservationSeries")
+    .select(["id", "weekdays", "startTime", "endTime", "firstDate", "lastDate"]).where("id", "=", r.seriesId).executeTakeFirst() : undefined;
+  const series = seriesRow ? {
+    ...seriesRow, startTime: seriesRow.startTime.slice(0, 5), endTime: seriesRow.endTime.slice(0, 5),
+    upcoming: Number((await trx.selectFrom("reservations").select((eb) => eb.fn.countAll<number>().as("n"))
+      .where("seriesId", "=", seriesRow.id).where("status", "in", ["pending", "confirmed"]).executeTakeFirstOrThrow()).n),
+  } : null;
   const invoice = await trx.selectFrom("invoices").select(["id", "status", "number"])
     .where("reservationId", "=", id).where("status", "<>", "void").executeTakeFirst() ?? null;
   const deposits = await trx.selectFrom("accountCredits").select((eb) => eb.fn.sum<number>("amountCents").as("n"))
@@ -93,6 +100,7 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     service: { id: r.serviceId, name: serviceName, category: serviceCategory },
     location: { id: r.locationId, name: locationName },
     groomer: groomerMembershipId ? { membershipId: groomerMembershipId, name: groomerName } : null,
+    series,
     pets,
     vaccinationCheck,
     invoice,
@@ -137,6 +145,65 @@ async function enforceCapacity(trx: Tx, auth: AuthContext, args: {
     { periods: short });
 }
 
+type NewReservation = Omit<ReservationInput, "status" | "startsAt" | "endsAt" | "petIds"> & {
+  status: "pending" | "confirmed"; startsAt: string; endsAt: string; petIds: string[];
+};
+
+/**
+ * Validate and create one reservation: customer, location and service checks, pet double-booking,
+ * capacity, business hours and groomer, then the rows and the audit entry. Used for single
+ * bookings and for each occurrence of a recurring series.
+ */
+export async function createReservation(trx: Tx, auth: AuthContext, input: NewReservation, seriesId?: string): Promise<{ id: string }> {
+  const startsAt = new Date(input.startsAt);
+  const endsAt = new Date(input.endsAt);
+  const [customer, location, service] = await Promise.all([
+    trx.selectFrom("customers").select(["id", "status", "archivedAt"]).where("id", "=", input.customerId).executeTakeFirst(),
+    trx.selectFrom("locations").select(["id", "isActive"]).where("id", "=", input.locationId).executeTakeFirst(),
+    trx.selectFrom("services").select(["id", "isActive", "priceCents", "priceUnit", "category"]).where("id", "=", input.serviceId).executeTakeFirst(),
+  ]);
+  if (!customer || customer.archivedAt) throw invalid("That customer was not found or is archived.");
+  if (customer.status === "banned") throw invalid("This customer's account is marked as banned. A manager must change the account status before booking.");
+  if (!location || !location.isActive) throw invalid("That location was not found or is inactive.");
+  if (!service || !service.isActive) throw invalid("That service was not found or is no longer offered.");
+  await checkPets(trx, customer.id, input.petIds, startsAt, endsAt);
+  const overridden = await enforceCapacity(trx, auth, {
+    locationId: location.id, serviceCategory: service.category, startsAt, endsAt,
+    petCount: input.petIds.length, override: input.overrideCapacity,
+  });
+  const hoursOverride = await enforceHours(trx, auth, {
+    locationId: location.id, override: input.overrideHours,
+    moments: [{ what: "Drop-off", at: startsAt }, { what: "Pick-up", at: endsAt }],
+  });
+  if (input.groomerMembershipId) {
+    if (service.category !== "grooming") throw invalid("A groomer can only be assigned to a grooming appointment.");
+    await checkGroomer(trx, {
+      orgId: auth.orgId, membershipId: input.groomerMembershipId, startsAt, endsAt,
+      timeZone: await locationTimezone(trx, location.id, auth.orgId),
+    });
+  }
+
+  const now = new Date();
+  const row = await trx.insertInto("reservations").values({
+    organizationId: auth.orgId, customerId: customer.id, locationId: location.id, serviceId: service.id,
+    status: input.status, startsAt, endsAt, notes: input.notes, unitPriceCents: service.priceCents,
+    priceUnit: service.priceUnit, createdByUserId: auth.userId, groomerMembershipId: input.groomerMembershipId ?? null,
+    seriesId: seriesId ?? null,
+    confirmedAt: input.status === "confirmed" ? now : null,
+  }).returning("id").executeTakeFirstOrThrow();
+  await trx.insertInto("reservationPets").values(input.petIds.map((petId) => ({
+    organizationId: auth.orgId, reservationId: row.id, customerId: customer.id, petId,
+  }))).execute();
+  await recordAudit(trx, auth, { action: "reservation.created", entityType: "reservation", entityId: row.id,
+    changes: {
+      status: input.status, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), petIds: input.petIds,
+      ...(overridden && { capacityOverride: overridden }),
+      ...(hoursOverride && { hoursOverride }),
+      ...(seriesId && { seriesId }),
+    } });
+  return row;
+}
+
 export const reservationRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", { preHandler: app.authorize("reservations:read") }, async (req) => {
     const f = reservationListQuery.parse(req.query);
@@ -175,51 +242,8 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/", { preHandler: app.authorize("reservations:write") }, async (req, reply) => {
     const input = reservationInput.parse(req.body);
-    const startsAt = new Date(input.startsAt);
-    const endsAt = new Date(input.endsAt);
     const created = await withTenant(app.db, req.auth, async (trx) => {
-      const [customer, location, service] = await Promise.all([
-        trx.selectFrom("customers").select(["id", "status", "archivedAt"]).where("id", "=", input.customerId).executeTakeFirst(),
-        trx.selectFrom("locations").select(["id", "isActive"]).where("id", "=", input.locationId).executeTakeFirst(),
-        trx.selectFrom("services").select(["id", "isActive", "priceCents", "priceUnit", "category"]).where("id", "=", input.serviceId).executeTakeFirst(),
-      ]);
-      if (!customer || customer.archivedAt) throw invalid("That customer was not found or is archived.");
-      if (customer.status === "banned") throw invalid("This customer's account is marked as banned. A manager must change the account status before booking.");
-      if (!location || !location.isActive) throw invalid("That location was not found or is inactive.");
-      if (!service || !service.isActive) throw invalid("That service was not found or is no longer offered.");
-      await checkPets(trx, customer.id, input.petIds, startsAt, endsAt);
-      const overridden = await enforceCapacity(trx, req.auth, {
-        locationId: location.id, serviceCategory: service.category, startsAt, endsAt,
-        petCount: input.petIds.length, override: input.overrideCapacity,
-      });
-      const hoursOverride = await enforceHours(trx, req.auth, {
-        locationId: location.id, override: input.overrideHours,
-        moments: [{ what: "Drop-off", at: startsAt }, { what: "Pick-up", at: endsAt }],
-      });
-      if (input.groomerMembershipId) {
-        if (service.category !== "grooming") throw invalid("A groomer can only be assigned to a grooming appointment.");
-        await checkGroomer(trx, {
-          orgId: req.auth.orgId, membershipId: input.groomerMembershipId, startsAt, endsAt,
-          timeZone: await locationTimezone(trx, location.id, req.auth.orgId),
-        });
-      }
-
-      const now = new Date();
-      const row = await trx.insertInto("reservations").values({
-        organizationId: req.auth.orgId, customerId: customer.id, locationId: location.id, serviceId: service.id,
-        status: input.status, startsAt, endsAt, notes: input.notes, unitPriceCents: service.priceCents,
-        priceUnit: service.priceUnit, createdByUserId: req.auth.userId, groomerMembershipId: input.groomerMembershipId ?? null,
-        confirmedAt: input.status === "confirmed" ? now : null,
-      }).returning("id").executeTakeFirstOrThrow();
-      await trx.insertInto("reservationPets").values(input.petIds.map((petId) => ({
-        organizationId: req.auth.orgId, reservationId: row.id, customerId: customer.id, petId,
-      }))).execute();
-      await recordAudit(trx, req.auth, { action: "reservation.created", entityType: "reservation", entityId: row.id,
-        changes: {
-          status: input.status, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), petIds: input.petIds,
-          ...(overridden && { capacityOverride: overridden }),
-          ...(hoursOverride && { hoursOverride }),
-        } });
+      const row = await createReservation(trx, req.auth, input);
       return loadReservation(trx, row.id, await orgTimezone(trx, req.auth.orgId));
     });
     return reply.status(201).send(created);

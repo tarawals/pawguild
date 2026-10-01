@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, describeHoursProblem, formatTimeOfDay, hoursProblem, localParts, summarizeHours, zonedDateTime, type OpeningHours } from "./hours";
+import { addDays, seriesDates, describeHoursProblem, formatTimeOfDay, hoursProblem, localParts, summarizeHours, zonedDateTime, type OpeningHours } from "./hours";
 
 const TZ = "America/New_York";
 const weekdays: OpeningHours[] = [1, 2, 3, 4, 5].map((weekday) => ({ weekday, opensAt: "07:00:00", closesAt: "19:00:00" }));
@@ -64,5 +64,12 @@ describe("zonedDateTime", () => {
   it("adds calendar days", () => {
     expect(addDays("2026-12-31", 1)).toBe("2027-01-01");
     expect(addDays("2027-03-14", -7)).toBe("2027-03-07");
+  });
+});
+
+describe("seriesDates", () => {
+  it("lists the matching weekdays in the range", () => {
+    expect(seriesDates("2026-10-05", "2026-10-18", [1, 3, 5])).toEqual(["2026-10-05", "2026-10-07", "2026-10-09", "2026-10-12", "2026-10-14", "2026-10-16"]);
+    expect(seriesDates("2026-10-05", "2026-10-05", [0])).toEqual([]);
   });
 });

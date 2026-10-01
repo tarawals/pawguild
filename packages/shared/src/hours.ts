@@ -102,3 +102,12 @@ export function addDays(date: string, days: number): string {
   const [y, m, d] = date.split("-").map(Number) as [number, number, number];
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
+
+/** Every date from `first` to `last` (inclusive) that falls on one of the weekdays (0 = Sunday). */
+export function seriesDates(first: string, last: string, weekdays: readonly number[]): string[] {
+  const out: string[] = [];
+  for (let d = first; d <= last; d = addDays(d, 1)) {
+    if (weekdays.includes(new Date(`${d}T12:00:00Z`).getUTCDay())) out.push(d);
+  }
+  return out;
+}
