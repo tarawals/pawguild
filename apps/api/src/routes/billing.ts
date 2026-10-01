@@ -10,6 +10,7 @@ import { withTenant, type Tx } from "../db";
 import type { AuthContext } from "../lib/auth-context";
 import { recordAudit } from "../lib/audit";
 import { locationTimezone } from "../lib/capacity";
+import { priceReservation } from "../lib/billing-rules";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors";
 import { idParam } from "../lib/params";
 
@@ -166,17 +167,20 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       if (existing) throw new AppError(409, "invoice_exists", "This reservation already has an invoice.", { invoiceId: existing.id });
       const pets = await trx.selectFrom("reservationPets as rp").innerJoin("pets as p", "p.id", "rp.petId")
         .select("p.name").where("rp.reservationId", "=", reservationId).orderBy("p.name").execute();
-      const est = estimateReservation({
-        unit: r.priceUnit as PriceUnit, unitPriceCents: r.unitPriceCents, startsAt: r.startsAt, endsAt: r.endsAt,
+      const priced = await priceReservation(trx, req.auth.orgId, {
+        serviceId: r.serviceId, unitPriceCents: r.unitPriceCents, priceUnit: r.priceUnit, startsAt: r.startsAt, endsAt: r.endsAt,
         petCount: pets.length, timeZone: await locationTimezone(trx, r.locationId),
       });
-      const unitWord = PRICE_UNIT_LABELS[r.priceUnit as PriceUnit].replace("per ", "");
+      const names = pets.map((p) => p.name).join(", ");
       const id = await createDraft(trx, req.auth, { customerId: r.customerId, locationId: r.locationId, reservationId });
-      await trx.insertInto("invoiceLines").values({
-        organizationId: req.auth.orgId, invoiceId: id, serviceId: r.serviceId, taxable: r.isTaxable,
-        description: `${r.serviceName} — ${pets.map((p) => p.name).join(", ")} (${est.quantity} ${unitWord}${est.quantity === 1 ? "" : "s"}${pets.length > 1 ? ` × ${pets.length} pets` : ""})`,
-        quantity: est.quantity * est.petCount, unitPriceCents: r.unitPriceCents,
-      }).execute();
+      let position = 0;
+      for (const line of priced.lines) {
+        await trx.insertInto("invoiceLines").values({
+          organizationId: req.auth.orgId, invoiceId: id, serviceId: line.serviceId, taxable: priced.taxable.get(line.serviceId) ?? false,
+          description: `${line.label} — ${names} (${line.unitsText}${pets.length > 1 ? ` × ${pets.length} pets` : ""})`,
+          quantity: line.units * line.petCount, unitPriceCents: line.unitPriceCents, discountCents: line.discountCents, position: position++,
+        }).execute();
+      }
       return loadInvoice(trx, id);
     });
     return reply.status(201).send(inv);

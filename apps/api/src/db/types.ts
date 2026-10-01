@@ -254,6 +254,20 @@ export interface ReservationSeriesTable {
   createdAt: CreatedAt;
 }
 
+export interface BillingSettingsTable {
+  organizationId: string;
+  boardingMode: Generated<string>;
+  boardingExtraTime: Generated<string>;
+  halfDayMaxMinutes: Generated<number>;
+  gracePeriodMinutes: Generated<number>;
+  daytimeStart: Generated<string>;
+  daytimeEnd: Generated<string>;
+  daycareFullServiceId: string | null;
+  daycareHalfServiceId: string | null;
+  additionalPetDiscountBps: Generated<number>;
+  updatedAt: Generated<Date>;
+}
+
 export interface LocationCapacitiesTable {
   organizationId: string;
   locationId: string;
@@ -467,6 +481,7 @@ export interface Database {
   locationHours: LocationHoursTable;
   shifts: ShiftsTable;
   reservationSeries: ReservationSeriesTable;
+  billingSettings: BillingSettingsTable;
   locationClosures: LocationClosuresTable;
   resources: ResourcesTable;
   serviceVaccineRequirements: ServiceVaccineRequirementsTable;

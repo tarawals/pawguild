@@ -1,5 +1,5 @@
 import {
-  assignmentsInput, isCapacityCategory, allowedTransitions, canTransition, estimateReservation, RESERVATION_STATUS_LABELS,
+  assignmentsInput, isCapacityCategory, allowedTransitions, canTransition, RESERVATION_STATUS_LABELS,
   reservationInput, reservationListQuery, type ReservationInput, reservationStatusInput, reservationUpdateInput,
   type PriceUnit, type ReservationStatus,
 } from "@pawguild/shared";
@@ -10,6 +10,7 @@ import type { AuthContext } from "../lib/auth-context";
 import { diff, recordAudit } from "../lib/audit";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors";
 import { capacityShortfalls, type PeriodOccupancy } from "../lib/capacity";
+import { priceReservation } from "../lib/billing-rules";
 import { checkGroomer } from "../lib/grooming";
 import { enforceHours, locationTimezone } from "../lib/hours";
 import { idParam } from "../lib/params";
@@ -70,7 +71,7 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     .select([
       "r.id", "r.status", "r.startsAt", "r.endsAt", "r.unitPriceCents", "r.priceUnit", "r.notes",
       "r.confirmedAt", "r.checkedInAt", "r.checkedOutAt", "r.cancelledAt", "r.cancellationReason",
-      "r.createdAt", "r.updatedAt", "r.customerId", "r.serviceId", "r.locationId", "r.groomerMembershipId", "r.seriesId",
+      "r.createdAt", "r.updatedAt", "r.customerId", "r.serviceId", "r.locationId", "r.groomerMembershipId", "r.seriesId", "r.organizationId",
       "c.firstName", "c.lastName", "c.phone", "s.name as serviceName", "s.category as serviceCategory",
       "l.name as locationName", "l.timezone as locationTimezone",
     ])
@@ -92,7 +93,19 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     .where("reservationId", "=", id).where("status", "<>", "void").executeTakeFirst() ?? null;
   const deposits = await trx.selectFrom("accountCredits").select((eb) => eb.fn.sum<number>("amountCents").as("n"))
     .where("reservationId", "=", id).where("kind", "=", "received").executeTakeFirst();
-  const { firstName, lastName, phone, serviceName, serviceCategory, locationName, locationTimezone, groomerName, groomerMembershipId, ...rest } = r;
+  const { firstName, lastName, phone, serviceName, serviceCategory, locationName, locationTimezone, groomerName, groomerMembershipId, organizationId: _org, ...rest } = r;
+  // Priced under the business's billing rules, exactly as an invoice would be.
+  const priced = await priceReservation(trx, r.organizationId, {
+    serviceId: r.serviceId, unitPriceCents: r.unitPriceCents, priceUnit: r.priceUnit, startsAt: r.startsAt, endsAt: r.endsAt,
+    petCount: pets.length, timeZone: locationTimezone ?? timeZone,
+  });
+  const estimate = {
+    lines: priced.lines.map(({ kind, description, units, petCount, unitPriceCents, discountCents, amountCents }) =>
+      ({ kind, description, units, petCount, unitPriceCents, discountCents, amountCents })),
+    totalCents: priced.totalCents,
+    // Kept for the summary line: the main charge's units.
+    quantity: priced.lines[0]?.units ?? 0, petCount: Math.max(1, pets.length), unitPriceCents: r.unitPriceCents,
+  };
   const status = r.status as ReservationStatus;
   return {
     ...rest,
@@ -106,10 +119,7 @@ async function loadReservation(trx: Tx, id: string, timeZone: string) {
     invoice,
     depositsCents: Number(deposits?.n ?? 0),
     allowedTransitions: allowedTransitions(status),
-    estimate: estimateReservation({
-      unit: r.priceUnit as PriceUnit, unitPriceCents: r.unitPriceCents, startsAt: r.startsAt, endsAt: r.endsAt,
-      petCount: Math.max(1, pets.length), timeZone: locationTimezone ?? timeZone,
-    }),
+    estimate,
   };
 }
 

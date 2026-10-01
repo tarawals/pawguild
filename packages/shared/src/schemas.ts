@@ -471,3 +471,26 @@ export const seriesCancelInput = z.object({
   fromDate: isoDate,
   reason: z.string().trim().min(1, "Give a reason for cancelling").max(1000),
 });
+
+export const billingRulesInput = z.object({
+  boardingMode: z.enum(["nights", "nights_plus_daycare", "per_24_hours"]),
+  boardingExtraTime: z.enum(["extra_night", "daycare"]),
+  halfDayMaxHours: z.number().min(1, "At least 1 hour").max(12, "At most 12 hours")
+    .refine((h) => Number.isInteger(h * 4), "Use quarter hours, like 4.5"),
+  gracePeriodMinutes: z.number().int("Whole minutes").min(0).max(180, "At most 180 minutes"),
+  daytimeStart: timeOfDay,
+  daytimeEnd: timeOfDay,
+  daycareFullServiceId: z.uuid().nullable(),
+  daycareHalfServiceId: z.uuid().nullable(),
+  additionalPetDiscountBps: z.number().int().min(0).max(10_000, "At most 100%"),
+}).superRefine((v, ctx) => {
+  if (v.daytimeEnd <= v.daytimeStart) ctx.addIssue({ code: "custom", path: ["daytimeEnd"], message: "Daytime must end after it starts" });
+  if (v.daycareFullServiceId && v.daycareFullServiceId === v.daycareHalfServiceId) {
+    ctx.addIssue({ code: "custom", path: ["daycareHalfServiceId"], message: "Choose a different service for half days" });
+  }
+  const needsDaycare = v.boardingMode === "nights_plus_daycare" || (v.boardingMode === "per_24_hours" && v.boardingExtraTime === "daycare");
+  if (needsDaycare && !v.daycareFullServiceId) {
+    ctx.addIssue({ code: "custom", path: ["daycareFullServiceId"], message: "Choose the full-day daycare service, so daycare during boarding can be charged" });
+  }
+});
+export type BillingRulesInput = z.input<typeof billingRulesInput>;

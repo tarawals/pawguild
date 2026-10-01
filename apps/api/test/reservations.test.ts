@@ -50,7 +50,8 @@ describe("reservations", () => {
     const r = res.json();
     expect(r.status).toBe("pending");
     expect(r.pets.map((p: { name: string }) => p.name)).toEqual(["Luna", "Rex"]);
-    expect(r.estimate).toEqual({ quantity: 3, petCount: 2, unitPriceCents: 5500, totalCents: 33000 });
+    expect(r.estimate).toMatchObject({ quantity: 3, petCount: 2, unitPriceCents: 5500, totalCents: 33000 });
+    expect(r.estimate.lines).toEqual([{ kind: "stay", description: "Boarding (3 nights)", units: 3, petCount: 2, unitPriceCents: 5500, discountCents: 0, amountCents: 33000 }]);
     expect(r.allowedTransitions).toEqual(["confirmed", "cancelled"]);
 
     // A later price change does not alter the booked price.
