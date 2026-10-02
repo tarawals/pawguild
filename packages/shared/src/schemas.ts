@@ -494,3 +494,24 @@ export const billingRulesInput = z.object({
   }
 });
 export type BillingRulesInput = z.input<typeof billingRulesInput>;
+
+export const PACKAGE_COVERS = ["full_day", "half_day"] as const;
+export type PackageCovers = (typeof PACKAGE_COVERS)[number];
+export const PACKAGE_COVERS_LABELS: Record<PackageCovers, string> = { full_day: "Full days of daycare", half_day: "Half days of daycare" };
+
+export const packageProductInput = z.object({
+  name: z.string().trim().min(1, "Package name is required").max(100),
+  covers: z.enum(PACKAGE_COVERS),
+  days: z.number().int("Whole days").min(1, "At least 1 day").max(500, "At most 500 days"),
+  priceCents: z.number().int("Amounts are in whole cents").min(0, "Price can't be negative").max(100_000_000),
+  /** null = never expires. */
+  expiresAfterDays: z.number().int("Whole days").min(1, "At least 1 day").max(3650, "At most 10 years").nullable(),
+  isTaxable: z.boolean().default(false),
+  isActive: z.boolean().optional(),
+});
+export const packageProductUpdateInput = packageProductInput.partial();
+export const sellPackageInput = z.object({
+  productId: z.uuid(),
+  /** Where the sale is invoiced; defaults to the first active location. */
+  locationId: z.uuid().optional(),
+});

@@ -24,6 +24,7 @@ import { shiftRoutes } from "./routes/shifts";
 import { settingsRoutes } from "./routes/settings";
 import { notificationRoutes } from "./routes/notifications";
 import { seriesRoutes } from "./routes/series";
+import { packageRoutes } from "./routes/packages";
 import { reservationRoutes } from "./routes/reservations";
 import { resourceRoutes } from "./routes/resources";
 import { serviceRoutes } from "./routes/services";
@@ -164,6 +165,7 @@ export async function buildApp(opts: { db: Db; config: Config; logger?: boolean 
   await app.register(settingsRoutes, { prefix: "/api/settings" });
   await app.register(notificationRoutes, { prefix: "/api/notifications" });
   await app.register(seriesRoutes, { prefix: "/api/reservation-series" });
+  await app.register(packageRoutes, { prefix: "/api" });
   await app.register(dashboardRoutes, { prefix: "/api/dashboard" });
   return app;
 }

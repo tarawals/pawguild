@@ -119,7 +119,7 @@ export const shiftRoutes: FastifyPluginAsync = async (app) => {
     const input = shiftUpdateInput.parse(req.body);
     return withTenant(app.db, req.auth, async (trx) => {
       const before = await trx.selectFrom("shifts").select(["id", "locationId", "membershipId", "startsAt", "endsAt", "note"])
-        .where("id", "=", id).forUpdate().executeTakeFirst();
+        .where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
       if (!before) throw notFound("Shift");
       const next = {
         locationId: input.locationId ?? before.locationId,

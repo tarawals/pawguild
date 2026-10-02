@@ -140,7 +140,7 @@ export const seriesRoutes: FastifyPluginAsync = async (app) => {
       if (!series) throw notFound("Series");
       const tz = await locationTimezone(trx, series.locationId, req.auth.orgId);
       const rows = await trx.selectFrom("reservations").select(["id", "status", "startsAt"])
-        .where("seriesId", "=", id).where("status", "in", ["pending", "confirmed"]).forUpdate().execute();
+        .where("seriesId", "=", id).where("status", "in", ["pending", "confirmed"]).forNoKeyUpdate().execute();
       const toCancel = rows.filter((r) => localParts(r.startsAt, tz).date >= fromDate);
       const now = new Date();
       for (const r of toCancel) {

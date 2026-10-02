@@ -33,7 +33,7 @@ async function orgTimezone(trx: Tx, orgId: string) {
  */
 async function checkPets(trx: Tx, customerId: string, petIds: string[], startsAt: Date, endsAt: Date, excludeReservationId?: string) {
   const pets = await trx.selectFrom("pets").select(["id", "name", "status", "archivedAt", "customerId"])
-    .where("id", "in", petIds).orderBy("id").forUpdate().execute();
+    .where("id", "in", petIds).orderBy("id").forNoKeyUpdate().execute();
   if (pets.length !== petIds.length || pets.some((p) => p.customerId !== customerId)) {
     throw invalid("One or more pets weren't found for this customer.");
   }
@@ -263,7 +263,7 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
     const id = idParam(req.params, "Reservation");
     const input = reservationUpdateInput.parse(req.body);
     return withTenant(app.db, req.auth, async (trx) => {
-      const before = await trx.selectFrom("reservations").selectAll().where("id", "=", id).forUpdate().executeTakeFirst();
+      const before = await trx.selectFrom("reservations").selectAll().where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
       if (!before) throw notFound("Reservation");
       if (!EDITABLE_STATUSES.includes(before.status)) {
         throw new AppError(409, "not_editable", `A reservation that is ${RESERVATION_STATUS_LABELS[before.status as ReservationStatus]} can't be edited.`);
@@ -327,7 +327,7 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
     const { status: to, reason, overrideVaccinations, overrideReason } = reservationStatusInput.parse(req.body);
     requireStatusPermission(req.auth, to);
     return withTenant(app.db, req.auth, async (trx) => {
-      const current = await trx.selectFrom("reservations").select(["id", "status"]).where("id", "=", id).forUpdate().executeTakeFirst();
+      const current = await trx.selectFrom("reservations").select(["id", "status"]).where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
       if (!current) throw notFound("Reservation");
       const from = current.status as ReservationStatus;
       if (!canTransition(from, to)) {
@@ -375,7 +375,7 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
     const { assignments } = assignmentsInput.parse(req.body);
     return withTenant(app.db, req.auth, async (trx) => {
       const r = await trx.selectFrom("reservations").select(["id", "status", "locationId", "startsAt", "endsAt"])
-        .where("id", "=", id).forUpdate().executeTakeFirst();
+        .where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
       if (!r) throw notFound("Reservation");
       if (!ACTIVE_STATUSES.includes(r.status as (typeof ACTIVE_STATUSES)[number])) {
         throw new AppError(409, "not_editable", `Kennels can't be changed on a ${RESERVATION_STATUS_LABELS[r.status as ReservationStatus]} reservation.`);
@@ -390,7 +390,7 @@ export const reservationRoutes: FastifyPluginAsync = async (app) => {
       if (resourceIds.length > 0) {
         // Lock the resources so two staff members can't fill the last space at once.
         const resources = await trx.selectFrom("resources").select(["id", "name", "capacity", "isActive", "locationId"])
-          .where("id", "in", resourceIds).orderBy("id").forUpdate().execute();
+          .where("id", "in", resourceIds).orderBy("id").forNoKeyUpdate().execute();
         if (resources.length !== resourceIds.length) throw invalid("That kennel or room was not found.");
         for (const res of resources) {
           if (res.locationId !== r.locationId) throw invalid(`${res.name} is at a different location.`);

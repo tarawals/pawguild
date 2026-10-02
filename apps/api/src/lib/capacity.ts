@@ -52,7 +52,7 @@ export async function occupancy(trx: Tx, args: {
 export async function capacityShortfalls(trx: Tx, args: {
   locationId: string; category: CapacityCategory; startsAt: Date; endsAt: Date; petCount: number; excludeReservationId?: string;
 }): Promise<PeriodOccupancy[]> {
-  await trx.selectFrom("locations").select("id").where("id", "=", args.locationId).forUpdate().executeTakeFirstOrThrow();
+  await trx.selectFrom("locations").select("id").where("id", "=", args.locationId).forNoKeyUpdate().executeTakeFirstOrThrow();
   const timeZone = await locationTimezone(trx, args.locationId);
   const periods = periodsCovered(args.category, args.startsAt, args.endsAt, timeZone);
   const rows = await occupancy(trx, { ...args, periods, timeZone });

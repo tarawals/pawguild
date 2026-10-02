@@ -1,6 +1,6 @@
 import {
   creditApplyInput, creditNoteInput, creditReceiveInput, creditRefundInput, invoiceBalance, invoiceRefundInput,
-  estimateReservation, formatMoney, invoiceCreateInput, invoiceLineInput, invoiceTotals, invoiceVoidInput,
+  calendarDate, formatMoney, invoiceCreateInput, invoiceLineInput, invoiceTotals, invoiceVoidInput,
   paymentInput, PRICE_UNIT_LABELS, type PriceUnit,
 } from "@pawguild/shared";
 import type { FastifyPluginAsync } from "fastify";
@@ -10,7 +10,8 @@ import { withTenant, type Tx } from "../db";
 import type { AuthContext } from "../lib/auth-context";
 import { recordAudit } from "../lib/audit";
 import { locationTimezone } from "../lib/capacity";
-import { priceReservation } from "../lib/billing-rules";
+import { getBillingRules, priceReservation } from "../lib/billing-rules";
+import { writeStayLines } from "../lib/packages";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors";
 import { idParam } from "../lib/params";
 
@@ -92,13 +93,32 @@ export async function loadInvoice(trx: Tx, id: string) {
 }
 
 async function draftInvoice(trx: Tx, id: string) {
-  const inv = await trx.selectFrom("invoices").select(["id", "status"]).where("id", "=", id).forUpdate().executeTakeFirst();
+  const inv = await trx.selectFrom("invoices").select(["id", "status"]).where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
   if (!inv) throw notFound("Invoice");
   if (inv.status !== "draft") throw new AppError(409, "not_draft", "Only draft invoices can be changed. Void and re-create it if it's wrong.");
   return inv;
 }
 
-async function createDraft(trx: Tx, auth: AuthContext, args: { customerId: string; locationId: string; reservationId?: string; notes?: string | null }) {
+/** Number the draft, fix its totals and mark it issued. */
+export async function issueInvoice(trx: Tx, auth: AuthContext, id: string) {
+  await draftInvoice(trx, id);
+  const inv = await trx.selectFrom("invoices as i").innerJoin("locations as l", "l.id", "i.locationId")
+    .select(["l.taxRateBps"]).where("i.id", "=", id).executeTakeFirstOrThrow();
+  const lines = await trx.selectFrom("invoiceLines").select(["quantity", "unitPriceCents", "discountCents", "taxable"]).where("invoiceId", "=", id).execute();
+  if (lines.length === 0) throw new AppError(409, "empty_invoice", "Add at least one line before issuing the invoice.");
+  const t = invoiceTotals(lines, inv.taxRateBps);
+  await trx.insertInto("invoiceCounters").values({ organizationId: auth.orgId }).onConflict((oc) => oc.column("organizationId").doNothing()).execute();
+  const { lastNumber } = await trx.updateTable("invoiceCounters").set((eb) => ({ lastNumber: eb("lastNumber", "+", 1) }))
+    .where("organizationId", "=", auth.orgId).returning("lastNumber").executeTakeFirstOrThrow();
+  await trx.updateTable("invoices").set({
+    status: "issued", number: lastNumber, taxRateBps: inv.taxRateBps, issuedAt: new Date(), issuedByUserId: auth.userId,
+    subtotalCents: t.subtotalCents, discountCents: t.discountCents, taxCents: t.taxCents, totalCents: t.totalCents,
+  }).where("id", "=", id).execute();
+  await recordAudit(trx, auth, { action: "invoice.issued", entityType: "invoice", entityId: id,
+    changes: { number: lastNumber, totalCents: t.totalCents, taxCents: t.taxCents, taxRateBps: inv.taxRateBps } });
+}
+
+export async function createDraft(trx: Tx, auth: AuthContext, args: { customerId: string; locationId: string; reservationId?: string; notes?: string | null }) {
   const [customer, location] = await Promise.all([
     trx.selectFrom("customers").select(["id", "archivedAt"]).where("id", "=", args.customerId).executeTakeFirst(),
     trx.selectFrom("locations").select(["id", "taxRateBps"]).where("id", "=", args.locationId).executeTakeFirst(),
@@ -158,7 +178,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       const r = await trx.selectFrom("reservations as r").innerJoin("services as s", "s.id", "r.serviceId")
         .select(["r.id", "r.customerId", "r.locationId", "r.status", "r.startsAt", "r.endsAt", "r.unitPriceCents", "r.priceUnit",
           "r.serviceId", "s.name as serviceName", "s.isTaxable"])
-        .where("r.id", "=", reservationId).forUpdate().executeTakeFirst();
+        .where("r.id", "=", reservationId).forNoKeyUpdate("r").executeTakeFirst(); // only the reservation: locking the service too could deadlock with bookings
       if (!r) throw notFound("Reservation");
       if (r.status === "cancelled" || r.status === "no_show") {
         throw new AppError(409, "not_billable", "Cancelled and no-show reservations can't be invoiced from here. Create a manual invoice for any fee.");
@@ -171,16 +191,12 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
         serviceId: r.serviceId, unitPriceCents: r.unitPriceCents, priceUnit: r.priceUnit, startsAt: r.startsAt, endsAt: r.endsAt,
         petCount: pets.length, timeZone: await locationTimezone(trx, r.locationId),
       });
-      const names = pets.map((p) => p.name).join(", ");
       const id = await createDraft(trx, req.auth, { customerId: r.customerId, locationId: r.locationId, reservationId });
-      let position = 0;
-      for (const line of priced.lines) {
-        await trx.insertInto("invoiceLines").values({
-          organizationId: req.auth.orgId, invoiceId: id, serviceId: line.serviceId, taxable: priced.taxable.get(line.serviceId) ?? false,
-          description: `${line.label} — ${names} (${line.unitsText}${pets.length > 1 ? ` × ${pets.length} pets` : ""})`,
-          quantity: line.units * line.petCount, unitPriceCents: line.unitPriceCents, discountCents: line.discountCents, position: position++,
-        }).execute();
-      }
+      const tz = await locationTimezone(trx, r.locationId);
+      await writeStayLines(trx, req.auth, {
+        invoiceId: id, reservationId, customerId: r.customerId, petNames: pets.map((p) => p.name), priced,
+        additionalPetDiscountBps: (await getBillingRules(trx, req.auth.orgId)).additionalPetDiscountBps, today: calendarDate(new Date(), tz),
+      });
       return loadInvoice(trx, id);
     });
     return reply.status(201).send(inv);
@@ -225,21 +241,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
   app.post("/invoices/:id/issue", { preHandler: app.authorize("billing:write") }, async (req) => {
     const id = idParam(req.params, "Invoice");
     return withTenant(app.db, req.auth, async (trx) => {
-      await draftInvoice(trx, id);
-      const inv = await trx.selectFrom("invoices as i").innerJoin("locations as l", "l.id", "i.locationId")
-        .select(["l.taxRateBps"]).where("i.id", "=", id).executeTakeFirstOrThrow();
-      const lines = await trx.selectFrom("invoiceLines").select(["quantity", "unitPriceCents", "discountCents", "taxable"]).where("invoiceId", "=", id).execute();
-      if (lines.length === 0) throw new AppError(409, "empty_invoice", "Add at least one line before issuing the invoice.");
-      const t = invoiceTotals(lines, inv.taxRateBps);
-      await trx.insertInto("invoiceCounters").values({ organizationId: req.auth.orgId }).onConflict((oc) => oc.column("organizationId").doNothing()).execute();
-      const { lastNumber } = await trx.updateTable("invoiceCounters").set((eb) => ({ lastNumber: eb("lastNumber", "+", 1) }))
-        .where("organizationId", "=", req.auth.orgId).returning("lastNumber").executeTakeFirstOrThrow();
-      await trx.updateTable("invoices").set({
-        status: "issued", number: lastNumber, taxRateBps: inv.taxRateBps, issuedAt: new Date(), issuedByUserId: req.auth.userId,
-        subtotalCents: t.subtotalCents, discountCents: t.discountCents, taxCents: t.taxCents, totalCents: t.totalCents,
-      }).where("id", "=", id).execute();
-      await recordAudit(trx, req.auth, { action: "invoice.issued", entityType: "invoice", entityId: id,
-        changes: { number: lastNumber, totalCents: t.totalCents, taxCents: t.taxCents, taxRateBps: inv.taxRateBps } });
+      await issueInvoice(trx, req.auth, id);
       return loadInvoice(trx, id);
     });
   });
@@ -248,9 +250,16 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     const id = idParam(req.params, "Invoice");
     const { reason } = invoiceVoidInput.parse(req.body);
     return withTenant(app.db, req.auth, async (trx) => {
-      const inv = await trx.selectFrom("invoices").select(["status", "number"]).where("id", "=", id).forUpdate().executeTakeFirst();
+      const inv = await trx.selectFrom("invoices").select(["status", "number"]).where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
       if (!inv) throw notFound("Invoice");
       if (inv.status === "void") throw new AppError(409, "already_void", "This invoice is already void.");
+      // A package sold on this invoice can't be voided once some of its days have been used.
+      const usedPackage = await trx.selectFrom("customerPackages as cp")
+        .innerJoin("packageRedemptions as r", "r.customerPackageId", "cp.id").innerJoin("invoices as ri", "ri.id", "r.invoiceId")
+        .select("cp.name").where("cp.invoiceId", "=", id).where("ri.status", "<>", "void").executeTakeFirst();
+      if (usedPackage) {
+        throw new AppError(409, "package_in_use", `This invoice sold the package "${usedPackage.name}", and some of its days have been used. Void the invoices that used them first, or add a credit note instead.`);
+      }
       if (inv.status === "issued") {
         if (!req.auth.permissions.has("billing:refund")) throw forbidden();
         const paid = await trx.selectFrom("payments").select("id").where("invoiceId", "=", id).where("voidedAt", "is", null).executeTakeFirst();
@@ -268,7 +277,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     const receivedAt = input.receivedAt ? new Date(input.receivedAt) : new Date();
     if (receivedAt.getTime() > Date.now() + 5 * 60_000) throw fieldError("receivedAt", "That date is in the future");
     const inv = await withTenant(app.db, req.auth, async (trx) => {
-      const locked = await trx.selectFrom("invoices").select(["status", "customerId", "totalCents"]).where("id", "=", id).forUpdate().executeTakeFirst();
+      const locked = await trx.selectFrom("invoices").select(["status", "customerId", "totalCents"]).where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
       if (!locked) throw notFound("Invoice");
       if (locked.status !== "issued") throw new AppError(409, "not_issued", "Issue the invoice before recording a payment.");
       const current = await loadInvoice(trx, id);
@@ -292,7 +301,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     return withTenant(app.db, req.auth, async (trx) => {
       const current = await trx.selectFrom("payments").select(["invoiceId"]).where("id", "=", id).executeTakeFirst();
       if (current) {
-        await trx.selectFrom("invoices").select("id").where("id", "=", current.invoiceId).forUpdate().execute();
+        await trx.selectFrom("invoices").select("id").where("id", "=", current.invoiceId).forNoKeyUpdate().execute();
         const refunded = await trx.selectFrom("refunds").select("id").where("invoiceId", "=", current.invoiceId).executeTakeFirst();
         if (refunded) throw new AppError(409, "has_refunds", "This invoice has refunds, so its payments can't be voided. Use a credit note or refund instead.");
       }
@@ -318,7 +327,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     const id = idParam(req.params, "Invoice");
     const input = creditNoteInput.parse(req.body);
     const inv = await withTenant(app.db, req.auth, async (trx) => {
-      const current = await trx.selectFrom("invoices").select(["status", "customerId", "totalCents"]).where("id", "=", id).forUpdate().executeTakeFirst();
+      const current = await trx.selectFrom("invoices").select(["status", "customerId", "totalCents"]).where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
       if (!current) throw notFound("Invoice");
       if (current.status !== "issued") throw new AppError(409, "not_issued", "Credit notes can only be added to an issued invoice.");
       const loaded = await loadInvoice(trx, id);
@@ -340,7 +349,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     const id = idParam(req.params, "Invoice");
     const input = invoiceRefundInput.parse(req.body);
     const inv = await withTenant(app.db, req.auth, async (trx) => {
-      const current = await trx.selectFrom("invoices").select(["status", "customerId"]).where("id", "=", id).forUpdate().executeTakeFirst();
+      const current = await trx.selectFrom("invoices").select(["status", "customerId"]).where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
       if (!current) throw notFound("Invoice");
       if (current.status !== "issued") throw new AppError(409, "not_issued", "Refunds can only be made against an issued invoice.");
       const loaded = await loadInvoice(trx, id);
@@ -368,10 +377,10 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     const id = idParam(req.params, "Invoice");
     const { amountCents } = creditApplyInput.parse(req.body);
     const inv = await withTenant(app.db, req.auth, async (trx) => {
-      const current = await trx.selectFrom("invoices").select(["status", "customerId"]).where("id", "=", id).forUpdate().executeTakeFirst();
+      const current = await trx.selectFrom("invoices").select(["status", "customerId"]).where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
       if (!current) throw notFound("Invoice");
       if (current.status !== "issued") throw new AppError(409, "not_issued", "Issue the invoice before applying credit.");
-      await trx.selectFrom("customers").select("id").where("id", "=", current.customerId).forUpdate().execute();
+      await trx.selectFrom("customers").select("id").where("id", "=", current.customerId).forNoKeyUpdate().execute();
       const loaded = await loadInvoice(trx, id);
       if (amountCents > loaded.balanceCents) throw fieldError("amountCents", `That's more than the balance due (${formatMoney(Math.max(0, loaded.balanceCents))}).`);
       if (amountCents > loaded.customerCreditCents) throw fieldError("amountCents", `The customer only has ${formatMoney(loaded.customerCreditCents)} of account credit.`);
@@ -433,7 +442,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     const customerId = idParam(req.params, "Customer");
     const input = creditRefundInput.parse(req.body);
     const out = await withTenant(app.db, req.auth, async (trx) => {
-      const c = await trx.selectFrom("customers").select("id").where("id", "=", customerId).forUpdate().executeTakeFirst();
+      const c = await trx.selectFrom("customers").select("id").where("id", "=", customerId).forNoKeyUpdate().executeTakeFirst();
       if (!c) throw notFound("Customer");
       const available = await customerCredit(trx, customerId);
       if (input.amountCents > available) throw fieldError("amountCents", `The customer only has ${formatMoney(available)} of account credit.`);

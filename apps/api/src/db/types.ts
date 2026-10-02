@@ -268,6 +268,46 @@ export interface BillingSettingsTable {
   updatedAt: Generated<Date>;
 }
 
+export interface PackageProductsTable {
+  id: Generated<string>;
+  organizationId: string;
+  name: string;
+  covers: string;
+  days: number;
+  priceCents: number;
+  expiresAfterDays: number | null;
+  isTaxable: Generated<boolean>;
+  isActive: Generated<boolean>;
+  createdAt: CreatedAt;
+  updatedAt: Generated<Date>;
+}
+
+export interface CustomerPackagesTable {
+  id: Generated<string>;
+  organizationId: string;
+  customerId: string;
+  productId: string;
+  name: string;
+  covers: string;
+  days: number;
+  priceCents: number;
+  purchasedAt: Generated<Date>;
+  expiresOn: DateString | null;
+  invoiceId: string;
+  soldByUserId: string;
+}
+
+export interface PackageRedemptionsTable {
+  id: Generated<string>;
+  organizationId: string;
+  customerPackageId: string;
+  invoiceId: string;
+  invoiceLineId: string;
+  reservationId: string | null;
+  usedOn: DateString;
+  createdAt: CreatedAt;
+}
+
 export interface LocationCapacitiesTable {
   organizationId: string;
   locationId: string;
@@ -482,6 +522,9 @@ export interface Database {
   shifts: ShiftsTable;
   reservationSeries: ReservationSeriesTable;
   billingSettings: BillingSettingsTable;
+  packageProducts: PackageProductsTable;
+  customerPackages: CustomerPackagesTable;
+  packageRedemptions: PackageRedemptionsTable;
   locationClosures: LocationClosuresTable;
   resources: ResourcesTable;
   serviceVaccineRequirements: ServiceVaccineRequirementsTable;

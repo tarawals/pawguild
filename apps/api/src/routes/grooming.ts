@@ -78,7 +78,7 @@ export const groomingRoutes: FastifyPluginAsync = async (app) => {
     return withTenant(app.db, req.auth, async (trx) => {
       const r = await trx.selectFrom("reservations as r").innerJoin("services as s", "s.id", "r.serviceId")
         .select(["r.id", "r.status", "r.startsAt", "r.endsAt", "r.locationId", "r.groomerMembershipId", "s.category"])
-        .where("r.id", "=", id).forUpdate("r").executeTakeFirst();
+        .where("r.id", "=", id).forNoKeyUpdate("r").executeTakeFirst();
       if (!r) throw notFound("Appointment");
       if (r.category !== "grooming") throw new AppError(422, "invalid_reservation", "A groomer can only be assigned to a grooming appointment.");
       if (!ASSIGNABLE_STATUSES.includes(r.status)) {

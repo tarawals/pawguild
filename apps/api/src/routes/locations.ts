@@ -81,7 +81,7 @@ export const locationRoutes: FastifyPluginAsync = async (app) => {
     const id = idParam(req.params, "Location");
     const input = locationUpdateInput.parse(req.body);
     return withTenant(app.db, req.auth, async (trx) => {
-      const before = await trx.selectFrom("locations").select([...DETAIL_COLUMNS]).where("id", "=", id).forUpdate().executeTakeFirst();
+      const before = await trx.selectFrom("locations").select([...DETAIL_COLUMNS]).where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
       if (!before) throw notFound("Location");
       await assertTimezoneKnownToDb(trx, input.timezone);
       if (input.name !== undefined) await assertNameFree(trx, input.name, id);
@@ -114,7 +114,7 @@ export const locationRoutes: FastifyPluginAsync = async (app) => {
     const id = idParam(req.params, "Location");
     const { days } = locationHoursInput.parse(req.body);
     return withTenant(app.db, req.auth, async (trx) => {
-      const location = await trx.selectFrom("locations").select("id").where("id", "=", id).forUpdate().executeTakeFirst();
+      const location = await trx.selectFrom("locations").select("id").where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
       if (!location) throw notFound("Location");
       const before = (await trx.selectFrom("locationHours").select(["weekday", "opensAt", "closesAt"]).where("locationId", "=", id).orderBy("weekday").execute())
         .map((h) => ({ weekday: h.weekday, opensAt: hhmm(h.opensAt), closesAt: hhmm(h.closesAt) }));
