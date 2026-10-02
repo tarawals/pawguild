@@ -199,6 +199,30 @@ apart). Each occurrence is an ordinary `reservations` row with `series_id` (comp
 by the same code as a single booking, so every check, care record, invoice and report treats it
 normally. Series rows are insert-only; cancelling "this and following" cancels the occurrences.
 
+## 0015_billing_rules
+
+`billing_settings`: one row per organization with how stays are charged. `boarding_mode` is
+`nights` (daytime included; the default, and how billing worked before), `nights_plus_daycare`
+(each day's time within `daytime_start`–`daytime_end` is charged as a half or full day of daycare)
+or `per_24_hours` (24-hour periods from drop-off; time past the last full period, after
+`grace_period_minutes`, is charged per `boarding_extra_time`: another period or daycare).
+`half_day_max_minutes` (default 300) plus the grace period is the longest half day.
+`daycare_full_service_id`/`daycare_half_service_id` name the services whose prices are used for
+daycare days. `additional_pet_discount_bps` discounts boarding and daycare for each pet after the
+first. The rules are applied by one shared engine (`packages/shared/src/stay-pricing.ts`) for the
+booking estimate, the reservation's estimate and the invoice drafted from it.
+
+## 0016_packages
+
+`package_products` (what's sold: full or half days, number of days, price, `expires_after_days`
+or NULL for never), `customer_packages` (a sale, with the terms copied and `expires_on` fixed at
+sale, linked to the issued invoice that sold it) and `package_redemptions` (one row per day of
+daycare paid by a package, linked to the $0 "prepaid" invoice line, `ON DELETE CASCADE` so
+deleting that draft line gives the day back). Remaining days are always computed: days minus
+redemptions on invoices that aren't void. Packages are spent soonest-expiring first, only for days
+on or before `expires_on`, under an advisory lock per customer. A package sale can't be voided
+once any of its days are used.
+
 ## Conventions
 
 - Money: `bigint` integer cents (see ADR 0003). Never `numeric` or float in application code.

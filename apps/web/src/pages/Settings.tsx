@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import { get, patch } from "../api";
 import { BillingRulesPanel } from "../components/BillingRulesPanel";
+import { PackageProductsPanel } from "../components/Packages";
 import { useCan } from "../auth";
 import { ErrorAlert, fieldErrors, Loading, PageHeader, Panel, SelectField, TextField } from "../components/ui";
 
@@ -50,7 +51,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Business settings" description="Your business's details, time zone and billing rules." />
+      <PageHeader title="Business settings" description="Your business's details, time zone, billing rules and daycare packages." />
       <Panel title="Business details">
         {!canManage ? (
           <dl className="details">
@@ -89,6 +90,7 @@ export function SettingsPage() {
         )}
       </Panel>
       <div style={{ marginTop: 16 }}><BillingRulesPanel /></div>
+      <div style={{ marginTop: 16 }}><PackageProductsPanel /></div>
     </>
   );
 }

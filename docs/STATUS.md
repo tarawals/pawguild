@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-10-01 (session 16: recurring reservations)_
+_Last updated: 2026-10-02 (session 17: billing rules and packages)_
 
 ## Built and tested
 
@@ -35,6 +35,8 @@ _Last updated: 2026-10-01 (session 16: recurring reservations)_
 | **Business settings** (organization name, email, phone, time zone; confirmation explaining what a time-zone change affects; currency fixed) | ✅ + RLS split | ✅ | view: signed in; edit: `settings:manage` (owner, administrator) | Business settings page | integration (incl. direct RLS check) + e2e |
 | **Internal notifications** (overdue medication, pets past pick-up, arrivals needing vaccinations, unconfirmed bookings in the next 48h, grooming without a groomer, serious or follow-up incidents, over capacity, overpaid invoices, open days with nobody scheduled; each shown only to roles that can act; computed live, clears itself) | — (derived) | ✅ | signed in; items filtered by permission | Notifications page; count in the top bar (rechecks every minute and after every change) | integration + e2e |
 | **Recurring reservations** (same-day services on chosen weekdays between two dates, up to six months or 100 dates; preview runs the real booking checks per date and lists skipped dates with a short reason; times stay local across DST; "cancel this and following" with one reason) | ✅ | ✅ | `reservations:write` to book and cancel; `reservations:read` to view | "Repeat on a schedule" on the booking form; Repeating booking panel on reservations | unit + integration + e2e |
+| **Billing rules** (boarding per night with daytime included, per night plus daycare for daytime hours, or per 24 hours with extra time as another period or daycare; half-day limit; grace period; daytime window; full/half-day daycare services; additional-pet discount; live examples while editing) | ✅ | ✅ | view: signed in; change: `settings:manage` | Business settings → Billing rules; itemized estimates on the booking form and reservations | unit (engine) + integration (estimate = invoice) + e2e |
+| **Daycare packages** (full-day or half-day packages; owner-set expiry or never; sold on an issued invoice; used automatically when daycare is invoiced, soonest-expiring first; days come back if the invoice is voided or the prepaid line removed; sale can't be voided once used) | ✅ | ✅ | set up: `settings:manage`; sell: `billing:write`; view: `billing:read` | Business settings → Daycare packages; Packages panel on customers | integration (incl. race, expiry, tenant isolation) + e2e |
 | **Sign-in throttling** (per email and per network address; same response for unknown emails) | ✅ | ✅ | — | Server message on sign-in page | integration |
 | **Session-ended handling** (back to sign-in with notice, then return to the same page; same-site redirects only) | — | — | — | ✅ | e2e |
 | Dashboard (outstanding balances and overpaid invoices, medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
@@ -42,14 +44,14 @@ _Last updated: 2026-10-01 (session 16: recurring reservations)_
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results (2026-10-01): typecheck ✅, 50 shared unit tests ✅, 185 API integration tests ✅,
-7 web tests ✅, 46 Playwright e2e tests ✅ (two full runs in a row).
-Fixed this session: signing out could land on "Your session ended" instead of the sign-in page when a
-background request (e.g. the notifications check) was refused mid-sign-out.
+Latest check results (2026-10-02): typecheck ✅, 63 shared unit tests ✅, 202 API integration tests ✅,
+7 web tests ✅, 49 Playwright e2e tests ✅ (two full runs in a row).
+Fixed this session: drafting an invoice from a reservation could deadlock with a booking at the same
+location (the invoice locked the service row). Row locks now use FOR NO KEY UPDATE throughout.
 
 ## Not built yet (in scope, by priority)
 
-1. Packages and memberships (prepaid daycare days)
+1. Memberships (recurring monthly fees) and package reports (sold, used, outstanding days)
 2. More reports (e.g. tax by rate, staff activity), internal notifications, business settings UI
 3. Waitlists, pet photos
 
@@ -57,7 +59,7 @@ background request (e.g. the notifications check) was refused mid-sign-out.
 
 - `auth-hardening.test.ts`: sign-in for every role, identical errors, cookie flags, expiry, revocation, tampering, deactivation, immediate role changes, injection attempts
 - `throttle.test.ts`: lockout per email and per address, reset on success, window expiry, no enumeration
-- `permissions-matrix.test.ts`: all 10 roles × 61 protected actions against the role map, and no action returns 500
+- `permissions-matrix.test.ts`: all 10 roles × 68 protected actions against the role map, and no action returns 500
 - `money-invariants.test.ts`: 40 randomized billing scenarios × 15 operations that must reconcile after every step, plus simultaneous-request races (payments, credit, refunds, invoice numbers, last capacity space, same pet)
 - `edge-cases.test.ts`: empty updates, markup/unicode, oversized input, unknown ids
 - Browser: `login.spec.ts` (every role, deep links, sign-out, session ending mid-use, safe redirects) and `full-day.spec.ts` (a full visit across three staff members)
@@ -104,6 +106,12 @@ background request (e.g. the notifications check) was refused mid-sign-out.
 - A repeating booking can't be edited as a whole: change single occurrences, or cancel the rest and
   book a new series. Overnight (per-night) services can't repeat. Dates that fail a check are
   skipped, never overridden; book those one at a time with a manager override if needed.
+- Billing rules apply when an invoice is drafted from a reservation; invoices already created aren't
+  repriced. The booked service keeps its locked-in price; the other daycare service (e.g. the
+  half-day service when a full day was booked) uses its current price.
+- Package revenue is recognized when the package is sold (the sale invoice); days used appear as
+  $0 prepaid lines. A full-day package doesn't cover half days, and vice versa.
+- Packages cover daycare only (including daycare charged during boarding), not boarding nights.
 - Notifications have no read or snooze state: an item stays until the problem is resolved. There is
   no email, text or push delivery (in-app only, per current scope).
 - Changing the business time zone doesn't move existing bookings (they keep their exact times),
@@ -122,8 +130,7 @@ background request (e.g. the notifications check) was refused mid-sign-out.
 
 ## Next recommended step
 
-**Packages (prepaid daycare days):** sell a package (e.g. 10 days of daycare for $340) as an
-invoice line; the customer's balance of days is used up when daycare is invoiced, instead of
-charging the day rate. Needs decisions before building: whether packages expire, whether unused
-days can be refunded, and whether a package covers half days. Memberships (recurring monthly fees)
-would follow.
+**Package and billing reports, then memberships:** add packages to Reports (packages sold, days
+used, days outstanding and their prepaid value, packages expiring soon) and a notification when a
+customer's package is nearly used up or about to expire. Then memberships: a recurring monthly fee
+with included days, which needs decisions about billing day, proration and cancellation.
