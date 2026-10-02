@@ -233,6 +233,17 @@ export interface Invoice {
   totals: { subtotalCents: number; discountCents: number; taxableCents: number; taxCents: number; totalCents: number };
   creditNotesCents: number; refundsCents: number; paidCents: number; balanceCents: number; customerCreditCents: number;
   paymentStatus: "draft" | "void" | "unpaid" | "partially_paid" | "paid" | "overpaid";
+  packages: InvoicePackages;
+}
+
+/** Prepaid package days on an invoice, and whether they can still be turned on or off (drafts only). */
+export interface PackageLeft { name: string; covers: "full_day" | "half_day"; days: number; remaining: number; expiresOn: string | null }
+export interface InvoicePackages {
+  usePackages: boolean; daysUsed: number;
+  /** days = used on this invoice; remaining = left on the package afterwards. */
+  usedFrom: (PackageLeft & { packageDays: number })[];
+  available: PackageLeft[];
+  canChange: boolean;
 }
 
 export const invoiceLabel = (i: { number: number | null; status: string }) =>

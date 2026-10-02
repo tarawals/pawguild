@@ -36,17 +36,19 @@ export async function packageBalances(trx: Tx, customerId: string, today: string
 export async function writeStayLines(trx: Tx, auth: AuthContext, args: {
   invoiceId: string; reservationId: string; customerId: string; petNames: string[]; priced: StayPrice & { taxable: Map<string, boolean> };
   additionalPetDiscountBps: number; today: string;
+  /** false: charge everything, even if the customer has packages. */
+  usePackages?: boolean;
 }) {
   const { invoiceId, priced, petNames } = args;
   const names = petNames.join(", ");
   const pets = Math.max(1, petNames.length);
-  const needsPackages = priced.lines.some((l) => (l.kind === "daycare_full" || l.kind === "daycare_half") && l.dates);
+  const needsPackages = args.usePackages !== false && priced.lines.some((l) => (l.kind === "daycare_full" || l.kind === "daycare_half") && l.dates);
   // Locked so two invoices for the same customer can't spend the same package days.
   const packages = needsPackages ? (await packageBalances(trx, args.customerId, args.today, true)).filter((p) => p.status === "active") : [];
   const left = new Map(packages.map((p) => [p.id, p.remaining]));
   let position = 0;
   const insertLine = async (values: { serviceId: string | null; description: string; quantity: number; unitPriceCents: number; discountCents: number; taxable: boolean }) =>
-    (await trx.insertInto("invoiceLines").values({ organizationId: auth.orgId, invoiceId, position: position++, ...values })
+    (await trx.insertInto("invoiceLines").values({ organizationId: auth.orgId, invoiceId, position: position++, stayLine: true, ...values })
       .returning("id").executeTakeFirstOrThrow()).id;
 
   for (const line of priced.lines) {

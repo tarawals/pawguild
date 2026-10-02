@@ -143,6 +143,61 @@ describe("selling and using packages", () => {
     expect(audit.changes).toMatchObject({ expiresAfterDays: { from: 30, to: 365 }, priceCents: { from: 34000, to: 36000 } });
   });
 
+  it("at checkout the package is used automatically, and staff can take it off and put it back", async () => {
+    const sold = (await desk.post(`/api/customers/${customerId}/packages`, { productId: product.full })).json();
+    const left = async () => (await balances()).find((p) => p.id === sold.packageId)!.remaining;
+    const r = (await desk.post("/api/reservations", {
+      customerId, locationId: org.locationId, serviceId: svc.full, petIds: [pets[0], pets[1]], startsAt: t(20, "08:00"), endsAt: t(20, "17:00"), status: "confirmed",
+    })).json();
+    await desk.post(`/api/reservations/${r.id}/status`, { status: "checked_in" });
+    const created = (await desk.post(`/api/reservations/${r.id}/invoice`)).json();
+    expect(created.packages).toMatchObject({ usePackages: true, daysUsed: 2, canChange: true,
+      usedFrom: [{ name: "10 Full Days", covers: "full_day", days: 2, packageDays: 10, remaining: 8, expiresOn: day(365) }] }); // the package now lasts a year (changed above)
+    expect((await desk.get(`/api/reservations/${r.id}/checkout-summary`)).json().billing.invoice.packages).toMatchObject({ daysUsed: 2, canChange: true });
+    expect(await left()).toBe(8);
+    await desk.post(`/api/invoices/${created.id}/lines`, { description: "Nail trim", quantity: 1, unitPriceCents: 1500 });
+
+    expect((await care.post(`/api/invoices/${created.id}/packages`, { use: false })).statusCode).toBe(403);
+    const off = (await desk.post(`/api/invoices/${created.id}/packages`, { use: false })).json();
+    expect(off.lines.map((l: Line) => [l.description, l.quantity, l.unitPriceCents, l.discountCents])).toEqual([
+      ["Daycare — Full Day — Ace, Bo (1 day × 2 pets)", 2, 3800, 380],
+      ["Nail trim", 1, 1500, 0],
+    ]);
+    expect(off.packages).toMatchObject({ usePackages: false, daysUsed: 0, usedFrom: [], canChange: true });
+    expect(off.packages.available).toEqual(expect.arrayContaining([
+      { name: "10 Full Days", covers: "full_day", days: 10, remaining: 10, expiresOn: day(365) },
+      { name: "5 Half Days", covers: "half_day", days: 5, remaining: 4, expiresOn: null },
+    ]));
+    expect(await left()).toBe(10);
+
+    const on = (await desk.post(`/api/invoices/${created.id}/packages`, { use: true })).json();
+    expect(on.lines.map((l: Line) => [l.description, l.quantity, l.unitPriceCents])).toEqual([
+      ["Daycare — Full Day — Ace, Bo (2 days prepaid: 10 Full Days)", 2, 0],
+      ["Nail trim", 1, 1500],
+    ]);
+    expect(await left()).toBe(8);
+    const audit = (await manager.get(`/api/audit?entityType=invoice&entityId=${created.id}`)).json().items.map((a: { action: string }) => a.action);
+    expect(audit.slice(0, 2)).toEqual(["invoice.packages_used", "invoice.packages_removed"]);
+
+    // Once issued, the choice is fixed.
+    await desk.post(`/api/invoices/${created.id}/issue`);
+    const issued = await desk.post(`/api/invoices/${created.id}/packages`, { use: false });
+    expect(issued.json().error.code).toBe("not_draft");
+    expect((await desk.get(`/api/invoices/${created.id}`)).json().packages.canChange).toBe(false);
+  });
+
+  it("an invoice that didn't use a package offers nothing to change unless the customer has one", async () => {
+    const other = (await desk.post("/api/customers", { firstName: "No", lastName: "Package" })).json().id;
+    const pet = (await desk.post("/api/pets", { customerId: other, name: "Zed", species: "dog" })).json().id;
+    const r = (await desk.post("/api/reservations", {
+      customerId: other, locationId: org.locationId, serviceId: svc.full, petIds: [pet], startsAt: t(21, "08:00"), endsAt: t(21, "17:00"), status: "confirmed",
+    })).json();
+    const inv = (await desk.post(`/api/reservations/${r.id}/invoice`)).json();
+    expect(inv.packages).toEqual({ usePackages: true, daysUsed: 0, usedFrom: [], available: [], canChange: false });
+    const manual = (await desk.post("/api/invoices", { customerId: other, locationId: org.locationId })).json();
+    expect((await desk.post(`/api/invoices/${manual.id}/packages`, { use: false })).json().error.code).toBe("no_stay_lines");
+  });
+
   it("other organizations can't sell our packages or see our customers' balances", async () => {
     const other = await createOrg(ctx.ownerDb, ["owner"]);
     const outsider = await login(ctx.app, other.users.owner!.email);

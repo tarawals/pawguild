@@ -193,7 +193,7 @@ export const careRoutes: FastifyPluginAsync = async (app) => {
         const loaded = inv ? await loadInvoice(trx, inv.id) : null;
         billing = {
           invoice: loaded && { id: loaded.id, status: loaded.status, number: loaded.number, totalCents: loaded.totals.totalCents,
-            balanceCents: loaded.balanceCents, paymentStatus: loaded.paymentStatus },
+            balanceCents: loaded.balanceCents, paymentStatus: loaded.paymentStatus, packages: loaded.packages },
           customerCreditCents: await customerCredit(trx, r.customerId),
         };
       }

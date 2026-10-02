@@ -11,7 +11,7 @@ import type { AuthContext } from "../lib/auth-context";
 import { recordAudit } from "../lib/audit";
 import { locationTimezone } from "../lib/capacity";
 import { getBillingRules, priceReservation } from "../lib/billing-rules";
-import { writeStayLines } from "../lib/packages";
+import { packageBalances, writeStayLines } from "../lib/packages";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors";
 import { idParam } from "../lib/params";
 
@@ -35,13 +35,13 @@ export async function loadInvoice(trx: Tx, id: string) {
   const inv = await trx.selectFrom("invoices as i")
     .innerJoin("customers as c", "c.id", "i.customerId")
     .innerJoin("locations as l", "l.id", "i.locationId")
-    .select(["i.id", "i.status", "i.number", "i.taxRateBps", "i.notes", "i.reservationId", "i.customerId", "i.locationId",
+    .select(["i.id", "i.status", "i.number", "i.taxRateBps", "i.notes", "i.reservationId", "i.customerId", "i.locationId", "i.usePackages",
       "i.createdAt", "i.issuedAt", "i.voidedAt", "i.voidReason", "i.subtotalCents", "i.discountCents", "i.taxCents", "i.totalCents",
       "c.firstName", "c.lastName", "c.email", "c.phone", "l.name as locationName", "l.taxRateBps as locationTaxRateBps"])
     .where("i.id", "=", id).executeTakeFirst();
   if (!inv) throw notFound("Invoice");
   const [lines, payments, creditNotes, refunds, creditCents] = await Promise.all([
-    trx.selectFrom("invoiceLines").select(["id", "serviceId", "description", "quantity", "unitPriceCents", "discountCents", "taxable", "position"])
+    trx.selectFrom("invoiceLines").select(["id", "serviceId", "description", "quantity", "unitPriceCents", "discountCents", "taxable", "position", "stayLine"])
       .where("invoiceId", "=", id).orderBy("position").orderBy("createdAt").execute(),
     trx.selectFrom("payments as p").innerJoin("users as u", "u.id", "p.recordedByUserId")
       .select(["p.id", "p.amountCents", "p.method", "p.reference", "p.receivedAt", "p.voidedAt", "p.voidReason"])
@@ -70,7 +70,22 @@ export async function loadInvoice(trx: Tx, id: string) {
   const balanceCents = inv.status === "issued"
     ? invoiceBalance({ totalCents: totals.totalCents, creditNotesCents, paymentsCents, refundsCents })
     : 0;
-  const { firstName, lastName, email, phone, locationName, locationTaxRateBps: _l, subtotalCents: _s, discountCents: _d, taxCents: _t, totalCents: _tt, ...rest } = inv;
+  const { firstName, lastName, email, phone, locationName, locationTaxRateBps: _l, subtotalCents: _s, discountCents: _d, taxCents: _t, totalCents: _tt, usePackages, ...rest } = inv;
+  // Prepaid package days on this invoice, what's left on each package, and whether staff can still
+  // turn packages on or off.
+  const usedRows = await trx.selectFrom("packageRedemptions as r")
+    .select("r.customerPackageId").select((eb) => eb.fn.countAll<number>().as("days"))
+    .where("r.invoiceId", "=", id).groupBy("r.customerPackageId").execute();
+  const daysUsed = usedRows.reduce((n, u) => n + Number(u.days), 0);
+  const hasStayLines = lines.some((l) => l.stayLine);
+  const balances = hasStayLines || daysUsed > 0
+    ? await packageBalances(trx, inv.customerId, calendarDate(new Date(), await locationTimezone(trx, inv.locationId))) : [];
+  const describe = (p: (typeof balances)[number]) => ({ name: p.name, covers: p.covers, remaining: p.remaining, days: p.days, expiresOn: p.expiresOn });
+  const usedFrom = usedRows.map((u) => {
+    const p = balances.find((b) => b.id === u.customerPackageId)!;
+    return { ...describe(p), days: Number(u.days), packageDays: p.days };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+  const available = balances.filter((p) => p.status === "active").map(describe);
   return {
     ...rest,
     taxRateBps: rate,
@@ -87,6 +102,12 @@ export async function loadInvoice(trx: Tx, id: string) {
     balanceCents,
     /** The customer's available account credit (for "apply credit"). */
     customerCreditCents: creditCents,
+    packages: {
+      usePackages, daysUsed, usedFrom,
+      /** The customer's packages that still have days, with what's left (after this invoice). */
+      available,
+      canChange: inv.status === "draft" && hasStayLines && (usePackages ? daysUsed > 0 : available.length > 0),
+    },
     paymentStatus: inv.status !== "issued" ? inv.status
       : balanceCents < 0 ? "overpaid" : balanceCents === 0 ? "paid" : paidCents > 0 ? "partially_paid" : "unpaid",
   };
@@ -97,6 +118,23 @@ async function draftInvoice(trx: Tx, id: string) {
   if (!inv) throw notFound("Invoice");
   if (inv.status !== "draft") throw new AppError(409, "not_draft", "Only draft invoices can be changed. Void and re-create it if it's wrong.");
   return inv;
+}
+
+/** Price a reservation's stay and write it onto a draft invoice, using packages unless told not to. */
+async function writeReservationCharges(trx: Tx, auth: AuthContext, invoiceId: string, r: {
+  id: string; customerId: string; locationId: string; serviceId: string; unitPriceCents: number; priceUnit: string; startsAt: Date; endsAt: Date;
+}, usePackages: boolean) {
+  const pets = await trx.selectFrom("reservationPets as rp").innerJoin("pets as p", "p.id", "rp.petId")
+    .select("p.name").where("rp.reservationId", "=", r.id).orderBy("p.name").execute();
+  const tz = await locationTimezone(trx, r.locationId);
+  const priced = await priceReservation(trx, auth.orgId, {
+    serviceId: r.serviceId, unitPriceCents: r.unitPriceCents, priceUnit: r.priceUnit, startsAt: r.startsAt, endsAt: r.endsAt,
+    petCount: pets.length, timeZone: tz,
+  });
+  await writeStayLines(trx, auth, {
+    invoiceId, reservationId: r.id, customerId: r.customerId, petNames: pets.map((p) => p.name), priced, usePackages,
+    additionalPetDiscountBps: (await getBillingRules(trx, auth.orgId)).additionalPetDiscountBps, today: calendarDate(new Date(), tz),
+  });
 }
 
 /** Number the draft, fix its totals and mark it issued. */
@@ -185,21 +223,36 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       }
       const existing = await trx.selectFrom("invoices").select("id").where("reservationId", "=", reservationId).where("status", "<>", "void").executeTakeFirst();
       if (existing) throw new AppError(409, "invoice_exists", "This reservation already has an invoice.", { invoiceId: existing.id });
-      const pets = await trx.selectFrom("reservationPets as rp").innerJoin("pets as p", "p.id", "rp.petId")
-        .select("p.name").where("rp.reservationId", "=", reservationId).orderBy("p.name").execute();
-      const priced = await priceReservation(trx, req.auth.orgId, {
-        serviceId: r.serviceId, unitPriceCents: r.unitPriceCents, priceUnit: r.priceUnit, startsAt: r.startsAt, endsAt: r.endsAt,
-        petCount: pets.length, timeZone: await locationTimezone(trx, r.locationId),
-      });
       const id = await createDraft(trx, req.auth, { customerId: r.customerId, locationId: r.locationId, reservationId });
-      const tz = await locationTimezone(trx, r.locationId);
-      await writeStayLines(trx, req.auth, {
-        invoiceId: id, reservationId, customerId: r.customerId, petNames: pets.map((p) => p.name), priced,
-        additionalPetDiscountBps: (await getBillingRules(trx, req.auth.orgId)).additionalPetDiscountBps, today: calendarDate(new Date(), tz),
-      });
+      await writeReservationCharges(trx, req.auth, id, { ...r, id: reservationId }, true);
       return loadInvoice(trx, id);
     });
     return reply.status(201).send(inv);
+  });
+
+  /** Use (or stop using) the customer's packages on a draft invoice for a stay; the stay's lines are rebuilt. */
+  app.post("/invoices/:id/packages", { preHandler: app.authorize("billing:write") }, async (req) => {
+    const id = idParam(req.params, "Invoice");
+    const { use } = z.object({ use: z.boolean() }).parse(req.body);
+    return withTenant(app.db, req.auth, async (trx) => {
+      await draftInvoice(trx, id);
+      const inv = await trx.selectFrom("invoices").select(["reservationId", "usePackages"]).where("id", "=", id).executeTakeFirstOrThrow();
+      const stayLines = await trx.selectFrom("invoiceLines").select("id").where("invoiceId", "=", id).where("stayLine", "=", true).execute();
+      if (!inv.reservationId || stayLines.length === 0) {
+        throw new AppError(409, "no_stay_lines", "This invoice has no stay charges to rebuild. To change how packages are used, void it and create the invoice again from the reservation.");
+      }
+      const r = await trx.selectFrom("reservations").select(["id", "customerId", "locationId", "serviceId", "unitPriceCents", "priceUnit", "startsAt", "endsAt"])
+        .where("id", "=", inv.reservationId).executeTakeFirstOrThrow();
+      const before = await trx.selectFrom("packageRedemptions").select((eb) => eb.fn.countAll<number>().as("n")).where("invoiceId", "=", id).executeTakeFirstOrThrow();
+      // Deleting the stay lines also removes their package redemptions (the days go back).
+      await trx.deleteFrom("invoiceLines").where("invoiceId", "=", id).where("stayLine", "=", true).execute();
+      await trx.updateTable("invoices").set({ usePackages: use }).where("id", "=", id).execute();
+      await writeReservationCharges(trx, req.auth, id, r, use);
+      const after = await trx.selectFrom("packageRedemptions").select((eb) => eb.fn.countAll<number>().as("n")).where("invoiceId", "=", id).executeTakeFirstOrThrow();
+      await recordAudit(trx, req.auth, { action: use ? "invoice.packages_used" : "invoice.packages_removed", entityType: "invoice", entityId: id,
+        changes: { usePackages: { from: inv.usePackages, to: use }, packageDays: { from: Number(before.n), to: Number(after.n) } } });
+      return loadInvoice(trx, id);
+    });
   });
 
   app.post("/invoices/:id/lines", { preHandler: app.authorize("billing:write") }, async (req, reply) => {

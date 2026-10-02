@@ -223,6 +223,14 @@ redemptions on invoices that aren't void. Packages are spent soonest-expiring fi
 on or before `expires_on`, under an advisory lock per customer. A package sale can't be voided
 once any of its days are used.
 
+## 0017_package_toggle
+
+`invoices.use_packages` (default true) and `invoice_lines.stay_line`. An invoice drafted from a
+reservation uses the customer's packages automatically; while it's a draft, staff can turn that
+off or on (`POST /api/invoices/:id/packages`), which deletes and rebuilds only the stay lines
+(redemptions go with the deleted lines) and leaves lines added by hand. Invoices drafted before
+this migration have no stay lines marked, so their choice can't be changed.
+
 ## Conventions
 
 - Money: `bigint` integer cents (see ADR 0003). Never `numeric` or float in application code.

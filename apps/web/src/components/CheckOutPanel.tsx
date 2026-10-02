@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatMoney, INCIDENT_CATEGORY_LABELS } from "@pawguild/shared";
 import { Link, useNavigate } from "react-router";
-import { get, invoiceLabel, post, type Invoice, type Reservation } from "../api";
+import { get, invoiceLabel, post, type Invoice, type Reservation, type InvoicePackages } from "../api";
 import { useCan } from "../auth";
 import { formatTime } from "../units";
 import { useStatusChange } from "./StatusActions";
+import { PackageToggle } from "./PackageToggle";
 import { ErrorAlert, Loading, Panel } from "./ui";
 
 interface CheckoutSummary {
@@ -20,7 +21,7 @@ interface CheckoutSummary {
     incidents: { id: string; category: string; severity: string; ownerNotified: boolean; resolvedAt: string | null }[];
   }[];
   billing: {
-    invoice: { id: string; status: string; number: number | null; totalCents: number; balanceCents: number; paymentStatus: string } | null;
+    invoice: { id: string; status: string; number: number | null; totalCents: number; balanceCents: number; paymentStatus: string; packages: InvoicePackages } | null;
     customerCreditCents: number;
   } | null;
 }
@@ -99,6 +100,9 @@ export function CheckOutPanel({ reservation: r }: { reservation: Reservation }) 
             </div>
           ))}
 
+          {summary.data.billing?.invoice && (
+            <PackageToggle invoiceId={summary.data.billing.invoice.id} packages={summary.data.billing.invoice.packages} reservationId={r.id} />
+          )}
           {summary.data.billing && (
             <div className="estimate" style={{ flexWrap: "wrap" }}>
               {summary.data.billing.invoice ? (

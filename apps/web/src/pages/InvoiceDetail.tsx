@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import { ApiError, del, get, invoiceLabel, post, type Invoice, type Payment, type Service } from "../api";
 import { useCan, useMe } from "../auth";
+import { PackageToggle } from "../components/PackageToggle";
 import { InvoiceStatusBadge } from "../components/InvoiceStatusBadge";
 import { Checkbox, ErrorAlert, fieldErrors, Loading, PageHeader, Panel, SelectField, TextField } from "../components/ui";
 import { formatDate, formatDateTime } from "../units";
@@ -256,6 +257,11 @@ export function InvoiceDetailPage() {
 
       <div className="stack">
         <Panel title="Charges" bodyless>
+          {(inv.packages.daysUsed > 0 || inv.packages.canChange) && (
+            <div className="panel-body no-print" style={{ paddingBottom: 0 }}>
+              <PackageToggle invoiceId={inv.id} packages={inv.packages} reservationId={inv.reservationId} />
+            </div>
+          )}
           <div className="table-wrap">
             <table>
               <thead><tr><th scope="col">Description</th><th scope="col" style={{ textAlign: "right" }}>Qty</th>

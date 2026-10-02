@@ -421,6 +421,7 @@ export interface InvoicesTable {
   voidedAt: Date | null;
   voidedByUserId: string | null;
   voidReason: string | null;
+  usePackages: Generated<boolean>;
 }
 
 export interface InvoiceLinesTable {
@@ -435,6 +436,7 @@ export interface InvoiceLinesTable {
   taxable: boolean;
   position: Generated<number>;
   createdAt: CreatedAt;
+  stayLine: Generated<boolean>;
 }
 
 export interface PaymentsTable {
