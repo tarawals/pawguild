@@ -12,7 +12,7 @@
  *  - Occupancy: pets per day (daycare) / per night (boarding), counting pending, confirmed,
  *    checked-in and completed stays.
  */
-import { daysCovered, reportRangeQuery } from "@pawguild/shared";
+import { addDays, calendarDate, daysCovered, reportRangeQuery } from "@pawguild/shared";
 import type { FastifyPluginAsync } from "fastify";
 import { sql } from "kysely";
 import { withTenant, type Tx } from "../db";
@@ -187,6 +187,63 @@ export const reportRoutes: FastifyPluginAsync = async (app) => {
             daycare: summarize(daycare), boarding: summarize(boarding),
           };
         })),
+      };
+    });
+  });
+
+  /**
+   * Packages: sold and used in the range (by local date), and what's outstanding today. Prepaid
+   * value of unused days = remaining days × the package's price per day. Packages sold on void
+   * invoices, and days used on void invoices, don't count.
+   */
+  app.get("/packages", { preHandler: app.authorize("reports:read") }, async (req) => {
+    const { from, to } = reportRangeQuery.parse(req.query);
+    return withTenant(app.db, req.auth, async (trx) => {
+      const tz = await orgTimezone(trx, req.auth.orgId);
+      const today = calendarDate(new Date(), tz);
+      const [products, used, packages] = await Promise.all([
+        sql<{ product: string; covers: string; sold: number; revenueCents: number }>`
+          select cp.name as product, cp.covers, count(*)::int as sold, sum(cp.price_cents)::bigint as revenue_cents
+            from customer_packages cp join invoices i on i.id = cp.invoice_id
+           where i.status <> 'void' and (cp.purchased_at at time zone ${tz})::date between ${from}::date and ${to}::date
+           group by cp.name, cp.covers order by cp.name`.execute(trx),
+        sql<{ product: string; covers: string; days: number }>`
+          select cp.name as product, cp.covers, count(*)::int as days
+            from package_redemptions r join invoices i on i.id = r.invoice_id join customer_packages cp on cp.id = r.customer_package_id
+           where i.status <> 'void' and r.used_on between ${from}::date and ${to}::date
+           group by cp.name, cp.covers order by cp.name`.execute(trx),
+        sql<{ id: string; customerId: string; customerName: string; name: string; covers: string; days: number; priceCents: number; expiresOn: string | null; used: number }>`
+          select cp.id, cp.customer_id, c.last_name || ', ' || c.first_name as customer_name, cp.name, cp.covers, cp.days,
+                 cp.price_cents::int as price_cents, cp.expires_on::text as expires_on,
+                 (select count(*) from package_redemptions r join invoices ri on ri.id = r.invoice_id
+                   where r.customer_package_id = cp.id and ri.status <> 'void')::int as used
+            from customer_packages cp join invoices i on i.id = cp.invoice_id join customers c on c.id = cp.customer_id
+           where i.status <> 'void'`.execute(trx),
+      ]);
+      const withLeft = packages.rows.map((p) => ({ ...p, remaining: Math.max(0, p.days - p.used), valuePerDay: p.priceCents / p.days }));
+      const active = withLeft.filter((p) => p.remaining > 0 && (!p.expiresOn || p.expiresOn >= today));
+      const expiredUnused = withLeft.filter((p) => p.remaining > 0 && p.expiresOn && p.expiresOn < today && p.expiresOn >= from && p.expiresOn <= to);
+      const value = (xs: typeof withLeft) => xs.reduce((n, p) => n + Math.round(p.remaining * p.valuePerDay), 0);
+      const names = [...new Set([...products.rows.map((r) => r.product), ...used.rows.map((r) => r.product)])].sort();
+      return {
+        from, to, timeZone: tz,
+        totals: {
+          sold: products.rows.reduce((n, r) => n + r.sold, 0),
+          revenueCents: products.rows.reduce((acc, r) => acc + n(r.revenueCents), 0),
+          daysUsed: used.rows.reduce((n, r) => n + r.days, 0),
+          outstandingDays: active.reduce((n, p) => n + p.remaining, 0),
+          outstandingValueCents: value(active),
+          expiredUnusedDays: expiredUnused.reduce((n, p) => n + p.remaining, 0),
+          expiredUnusedValueCents: value(expiredUnused),
+        },
+        byProduct: names.map((name) => {
+          const p = products.rows.find((r) => r.product === name), u = used.rows.find((r) => r.product === name);
+          return { product: name, covers: p?.covers ?? u?.covers ?? null, sold: p?.sold ?? 0, revenueCents: n(p?.revenueCents), daysUsed: u?.days ?? 0 };
+        }),
+        // Packages with days left that expire within 30 days, soonest first.
+        expiringSoon: active.filter((p) => p.expiresOn && p.expiresOn <= addDays(today, 30))
+          .sort((a, b) => a.expiresOn!.localeCompare(b.expiresOn!))
+          .map((p) => ({ customerId: p.customerId, customerName: p.customerName, name: p.name, covers: p.covers, remaining: p.remaining, expiresOn: p.expiresOn, valueCents: Math.round(p.remaining * p.valuePerDay) })),
       };
     });
   });

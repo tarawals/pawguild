@@ -31,7 +31,7 @@ async function daycare(service: "full" | "half", n: number, from: string, to: st
   return { id: inv.id as string, lines: (inv.lines as Line[]).map((l) => [l.description, l.quantity, l.unitPriceCents, l.discountCents]) };
 }
 const balances = async () => (await desk.get(`/api/customers/${customerId}/packages`)).json().items as
-  { id: string; name: string; remaining: number; status: string; expiresOn: string | null; invoiceId: string; uses: { usedOn: string }[] }[];
+  { id: string; name: string; remaining: number; status: string; expiresOn: string | null; invoiceId: string; uses: { usedOn: string; invoiceStatus: string }[] }[];
 
 beforeAll(async () => {
   ctx = await setupTestApp();
@@ -196,6 +196,39 @@ describe("selling and using packages", () => {
     expect(inv.packages).toEqual({ usePackages: true, daysUsed: 0, usedFrom: [], available: [], canChange: false });
     const manual = (await desk.post("/api/invoices", { customerId: other, locationId: org.locationId })).json();
     expect((await desk.post(`/api/invoices/${manual.id}/packages`, { use: false })).json().error.code).toBe("no_stay_lines");
+  });
+
+  it("the packages report agrees with the customer's balances", async () => {
+    expect((await desk.get(`/api/reports/packages?from=${today}&to=${day(60)}`)).statusCode).toBe(403);
+    const rep = (await owner.get(`/api/reports/packages?from=${today}&to=${day(60)}`)).json();
+    const live = (await balances()).filter((p) => p.status !== "void");
+    expect(rep.totals.sold).toBe(live.length);
+    expect(rep.totals.daysUsed).toBe(live.reduce((n, p) => n + p.uses.filter((u) => u.invoiceStatus !== "void").length, 0));
+    const active = live.filter((p) => p.status === "active");
+    expect(rep.totals.outstandingDays).toBe(active.reduce((n, p) => n + p.remaining, 0));
+    expect(rep.byProduct.map((b: { product: string }) => b.product)).toEqual(["10 Full Days", "5 Half Days"]);
+    expect(rep.byProduct.reduce((n: number, b: { revenueCents: number }) => n + b.revenueCents, 0)).toBe(rep.totals.revenueCents);
+    // Nothing was sold before today.
+    expect((await owner.get(`/api/reports/packages?from=${day(-30)}&to=${day(-1)}`)).json().totals).toMatchObject({ sold: 0, revenueCents: 0 });
+  });
+
+  it("notifies when a package is about to expire or down to its last day", async () => {
+    const trial = (await owner.post("/api/package-products", { name: "3 Day Trial", covers: "full_day", days: 3, priceCents: 9000, expiresAfterDays: 5 })).json().id;
+    await desk.post(`/api/customers/${customerId}/packages`, { productId: trial });
+    const two = (await owner.post("/api/package-products", { name: "2 Full Days", covers: "full_day", days: 2, priceCents: 7000, expiresAfterDays: null })).json().id;
+    const items = async (client: typeof desk) => (await client.get("/api/notifications")).json().items as { kind: string; title: string; detail: string }[];
+    const expiring = (await items(desk)).find((i) => i.kind === "package_expiring");
+    expect(expiring).toMatchObject({ title: "Package expiring: Pat Package — 3 Day Trial" });
+    expect(expiring!.detail).toMatch(/^3 full days left, use by /);
+    expect((await items(care)).some((i) => i.kind.startsWith("package"))).toBe(false);
+    const sold = (await desk.post(`/api/customers/${customerId}/packages`, { productId: two })).json();
+    // Spend one of its two days directly against a throwaway invoice line.
+    const inv = (await desk.post("/api/invoices", { customerId, locationId: org.locationId })).json();
+    const withLine = (await desk.post(`/api/invoices/${inv.id}/lines`, { description: "Daycare (prepaid)", quantity: 1, unitPriceCents: 0 })).json();
+    await ctx.ownerDb.insertInto("packageRedemptions").values({
+      organizationId: org.orgId, customerPackageId: sold.packageId, invoiceId: inv.id, invoiceLineId: withLine.lines[0].id, usedOn: today,
+    }).execute();
+    expect((await items(desk)).find((i) => i.kind === "package_last_day")).toMatchObject({ title: "Last day on package: Pat Package — 2 Full Days" });
   });
 
   it("other organizations can't sell our packages or see our customers' balances", async () => {

@@ -6,7 +6,7 @@ import { EmptyState, ErrorAlert, Loading, PageHeader, Panel, TextField } from ".
 import { csvMoney, downloadCsv, type CsvCell } from "../csv";
 import { formatDate } from "../units";
 
-const TABS = [["sales", "Sales"], ["payments", "Payments"], ["balances", "Balances"], ["occupancy", "Occupancy"]] as const;
+const TABS = [["sales", "Sales"], ["payments", "Payments"], ["balances", "Balances"], ["packages", "Packages"], ["occupancy", "Occupancy"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -62,6 +62,7 @@ export function ReportsPage() {
       {!rangeError && tab === "sales" && <Sales from={from} to={to} />}
       {!rangeError && tab === "payments" && <Payments from={from} to={to} />}
       {tab === "balances" && <Balances />}
+      {!rangeError && tab === "packages" && <PackagesView from={from} to={to} />}
       {!rangeError && tab === "occupancy" && <OccupancyView from={from} to={to} />}
     </>
   );
@@ -273,6 +274,68 @@ function OccupancyView({ from, to }: { from: string; to: string }) {
         );
       })}
       <p className="muted" style={{ margin: 0 }}>Counts pending, confirmed, checked-in and completed stays; cancellations and no-shows are left out. Limits are today's settings.</p>
+    </div>
+  );
+}
+
+interface PackagesReport {
+  totals: { sold: number; revenueCents: number; daysUsed: number; outstandingDays: number; outstandingValueCents: number; expiredUnusedDays: number; expiredUnusedValueCents: number };
+  byProduct: { product: string; covers: string | null; sold: number; revenueCents: number; daysUsed: number }[];
+  expiringSoon: { customerId: string; customerName: string; name: string; covers: string; remaining: number; expiresOn: string; valueCents: number }[];
+}
+
+function PackagesView({ from, to }: { from: string; to: string }) {
+  const q = useQuery({ queryKey: ["reports", "packages", from, to], queryFn: () => get<PackagesReport>(`/api/reports/packages?from=${from}&to=${to}`) });
+  if (q.isPending) return <Loading />;
+  if (!q.data) return <ErrorAlert error={q.error} />;
+  const { totals, byProduct, expiringSoon } = q.data;
+  const csv = () => [
+    ["Package", "Sold", "Revenue", "Days used"],
+    ...byProduct.map((p) => [p.product, p.sold, csvMoney(p.revenueCents), p.daysUsed]),
+    [],
+    ["Unused days today", totals.outstandingDays], ["Prepaid value of unused days", csvMoney(totals.outstandingValueCents)],
+    ["Days that expired unused in this period", totals.expiredUnusedDays], ["Their value", csvMoney(totals.expiredUnusedValueCents)],
+  ];
+  return (
+    <div className="stack">
+      <div className="stats" style={{ marginBottom: 0 }}>
+        <Stat label="Packages sold" value={totals.sold} />
+        <Stat label="Package sales" value={formatMoney(totals.revenueCents)} />
+        <Stat label="Days used" value={totals.daysUsed} />
+        <Stat label="Unused days (today)" value={totals.outstandingDays} />
+        <Stat label="Prepaid value unused" value={formatMoney(totals.outstandingValueCents)} />
+      </div>
+      <Panel title="By package" actions={<CsvButton filename={`packages-${from}-to-${to}.csv`} rows={csv} />} bodyless>
+        {byProduct.length === 0 ? <EmptyState title="No packages sold or used in this period" /> : (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Package</th><th scope="col" style={right}>Sold</th><th scope="col" style={right}>Sales</th><th scope="col" style={right}>Days used</th></tr></thead>
+              <tbody>{byProduct.map((p) => (
+                <tr key={p.product}><td>{p.product}</td><td style={right}>{p.sold}</td><td style={right}>{formatMoney(p.revenueCents)}</td><td style={right}>{p.daysUsed}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+        <p className="muted panel-body" style={{ margin: 0 }}>
+          Sales count when a package is sold; days used are the daycare days it paid for (on invoices that weren't voided).
+          {totals.expiredUnusedDays > 0 && ` ${totals.expiredUnusedDays} unused days (${formatMoney(totals.expiredUnusedValueCents)}) expired in this period.`}
+        </p>
+      </Panel>
+      <Panel title="Expiring in the next 30 days" bodyless>
+        {expiringSoon.length === 0 ? <EmptyState title="No packages with days left expire in the next 30 days" /> : (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Customer</th><th scope="col">Package</th><th scope="col" style={right}>Days left</th><th scope="col">Use by</th><th scope="col" style={right}>Value</th></tr></thead>
+              <tbody>{expiringSoon.map((p, i) => (
+                <tr key={`${p.customerId}-${p.name}-${i}`}>
+                  <td><Link to={`/customers/${p.customerId}`}>{p.customerName}</Link></td><td>{p.name}</td>
+                  <td style={right}>{p.remaining}</td><td>{formatDate(p.expiresOn)}</td><td style={right}>{formatMoney(p.valueCents)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
     </div>
   );
 }

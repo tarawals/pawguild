@@ -151,6 +151,36 @@ export async function buildNotifications(trx: Tx, auth: AuthContext, now = new D
     }
   }
 
+  // Packages about to expire with days left, or down to their last day (a chance to renew).
+  if (can("billing:read")) {
+    const today = calendarDate(now, org.timezone);
+    const soon = await sql<{ id: string; customerId: string; customerName: string; name: string; covers: string; days: number; expiresOn: string | null; used: number }>`
+      select cp.id, cp.customer_id, c.first_name || ' ' || c.last_name as customer_name, cp.name, cp.covers, cp.days, cp.expires_on::text as expires_on,
+             (select count(*) from package_redemptions r join invoices ri on ri.id = r.invoice_id
+               where r.customer_package_id = cp.id and ri.status <> 'void')::int as used
+        from customer_packages cp join invoices i on i.id = cp.invoice_id join customers c on c.id = cp.customer_id
+       where i.status <> 'void' and (cp.expires_on is null or cp.expires_on >= ${today}::date)
+       order by cp.expires_on nulls last limit 500`.execute(trx);
+    for (const p of soon.rows) {
+      const left = p.days - p.used;
+      const kind = (n: number) => `${p.covers === "full_day" ? "full" : "half"} day${n === 1 ? "" : "s"}`;
+      if (left <= 0) continue;
+      if (p.expiresOn && p.expiresOn <= addDays(today, 7)) {
+        items.push({
+          id: `package-expiring:${p.id}`, kind: "package_expiring", severity: "low",
+          title: `Package expiring: ${p.customerName} — ${p.name}`, detail: `${left} ${kind(left)} left, use by ${dayName(p.expiresOn)}.`,
+          link: `/customers/${p.customerId}`, at: `${p.expiresOn}T00:00:00.000Z`,
+        });
+      } else if (left === 1) {
+        items.push({
+          id: `package-last-day:${p.id}`, kind: "package_last_day", severity: "low",
+          title: `Last day on package: ${p.customerName} — ${p.name}`, detail: "Offer a new package next visit.",
+          link: `/customers/${p.customerId}`, at: null,
+        });
+      }
+    }
+  }
+
   // Open days in the coming week with nobody scheduled (only once the business uses the schedule).
   if (can("schedules:manage")) {
     const usesSchedule = await trx.selectFrom("shifts").select("id")

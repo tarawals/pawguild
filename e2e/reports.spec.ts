@@ -71,3 +71,15 @@ test("front desk doesn't see reports", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Reports" })).toHaveCount(0);
   expect((await page.request.get("/api/reports/balances")).status()).toBe(403);
 });
+
+test("the packages report matches the records", async ({ page }) => {
+  await signIn(page, "owner@harborhounds.example");
+  await page.goto("/reports?tab=packages");
+  await page.getByRole("button", { name: "Year to date" }).click();
+  const from = await page.getByLabel("From").inputValue();
+  const to = await page.getByLabel("To").inputValue();
+  const api = await (await page.request.get(`/api/reports/packages?from=${from}&to=${to}`)).json();
+  await expect(stat(page, "Packages sold")).toHaveText(String(api.totals.sold));
+  await expect(stat(page, "Unused days (today)")).toHaveText(String(api.totals.outstandingDays));
+  await expect(page.getByRole("region", { name: "Expiring in the next 30 days" })).toBeVisible();
+});
