@@ -127,6 +127,7 @@ const probes: Probe[] = [
   { name: "add closure", method: "POST", url: () => `/api/locations/${ids.location}/closures`, body: {}, allowed: needs("locations:manage") },
   { name: "remove closure", method: "DELETE", url: () => `/api/locations/${ids.location}/closures/00000000-0000-4000-8000-000000000000`, allowed: needs("locations:manage") },
   { name: "packages report", method: "GET", url: () => "/api/reports/packages?from=2026-01-01&to=2026-01-31", allowed: needs("reports:read") },
+  { name: "memberships report", method: "GET", url: () => "/api/reports/memberships?from=2026-01-01&to=2026-01-31", allowed: needs("reports:read") },
   { name: "occupancy report", method: "GET", url: () => "/api/reports/occupancy?from=2026-01-01&to=2026-01-07", allowed: needs("reports:read") },
 ];
 

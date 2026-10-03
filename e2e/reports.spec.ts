@@ -83,3 +83,14 @@ test("the packages report matches the records", async ({ page }) => {
   await expect(stat(page, "Unused days (today)")).toHaveText(String(api.totals.outstandingDays));
   await expect(page.getByRole("region", { name: "Expiring in the next 30 days" })).toBeVisible();
 });
+
+test("the memberships report matches the records", async ({ page }) => {
+  await signIn(page, "owner@harborhounds.example");
+  await page.goto("/reports?tab=memberships");
+  await page.getByRole("button", { name: "Year to date" }).click();
+  const from = await page.getByLabel("From").inputValue();
+  const to = await page.getByLabel("To").inputValue();
+  const api = await (await page.request.get(`/api/reports/memberships?from=${from}&to=${to}`)).json();
+  await expect(stat(page, "Members now")).toHaveText(String(api.totals.members));
+  await expect(stat(page, "Included days used")).toHaveText(`${api.totals.daysUsed} of ${api.totals.daysIncluded}`);
+});

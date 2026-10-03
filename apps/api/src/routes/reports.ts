@@ -247,4 +247,58 @@ export const reportRoutes: FastifyPluginAsync = async (app) => {
       };
     });
   });
+
+  /**
+   * Memberships: who's a member now and the monthly fees that represents, plus for the range the
+   * months billed, sign-ups, cancellations and how much of the included days were used. "Days
+   * included" counts months that start in the range; voided months don't count.
+   */
+  app.get("/memberships", { preHandler: app.authorize("reports:read") }, async (req) => {
+    const { from, to } = reportRangeQuery.parse(req.query);
+    return withTenant(app.db, req.auth, async (trx) => {
+      const tz = await orgTimezone(trx, req.auth.orgId);
+      const today = calendarDate(new Date(), tz);
+      const [members, months, signups, cancels] = await Promise.all([
+        sql<{ name: string; priceCents: number; cancelled: boolean }>`
+          select cm.name, cm.price_cents::int as price_cents, cm.cancelled_at is not null as cancelled
+            from customer_memberships cm
+           where cm.started_on <= ${today}::date and (cm.ends_on is null or cm.ends_on >= ${today}::date)
+             and not (cm.cancelled_at is not null and not exists (select 1 from membership_periods mp where mp.customer_membership_id = cm.id))`.execute(trx),
+        sql<{ name: string; months: number; revenueCents: number; daysIncluded: number; daysUsed: number }>`
+          select cm.name, count(*)::int as months, sum(i.total_cents)::bigint as revenue_cents, sum(mp.days)::int as days_included,
+                 sum((select count(*) from package_redemptions r join invoices ri on ri.id = r.invoice_id
+                       where r.membership_period_id = mp.id and ri.status <> 'void'))::int as days_used
+            from membership_periods mp join customer_memberships cm on cm.id = mp.customer_membership_id join invoices i on i.id = mp.invoice_id
+           where i.status <> 'void' and mp.period_start between ${from}::date and ${to}::date
+           group by cm.name`.execute(trx),
+        sql<{ name: string; n: number }>`
+          select name, count(*)::int as n from customer_memberships where started_on between ${from}::date and ${to}::date group by name`.execute(trx),
+        sql<{ name: string; n: number }>`
+          select name, count(*)::int as n from customer_memberships
+           where cancelled_at is not null and (cancelled_at at time zone ${tz})::date between ${from}::date and ${to}::date group by name`.execute(trx),
+      ]);
+      const names = [...new Set([...members.rows, ...months.rows, ...signups.rows, ...cancels.rows].map((r) => r.name))].sort();
+      const byPlan = names.map((name) => {
+        const m = months.rows.find((r) => r.name === name);
+        const current = members.rows.filter((r) => r.name === name);
+        return {
+          plan: name, members: current.length, ending: current.filter((r) => r.cancelled).length,
+          monthsBilled: m?.months ?? 0, revenueCents: n(m?.revenueCents), daysIncluded: m?.daysIncluded ?? 0, daysUsed: m?.daysUsed ?? 0,
+          signups: signups.rows.find((r) => r.name === name)?.n ?? 0, cancellations: cancels.rows.find((r) => r.name === name)?.n ?? 0,
+        };
+      });
+      const sum = (k: keyof (typeof byPlan)[number]) => byPlan.reduce((acc, p) => acc + (p[k] as number), 0);
+      return {
+        from, to, timeZone: tz,
+        totals: {
+          members: sum("members"), ending: sum("ending"),
+          // Monthly fees of members who aren't leaving.
+          monthlyRecurringCents: members.rows.filter((r) => !r.cancelled).reduce((acc, r) => acc + r.priceCents, 0),
+          monthsBilled: sum("monthsBilled"), revenueCents: sum("revenueCents"), daysIncluded: sum("daysIncluded"), daysUsed: sum("daysUsed"),
+          signups: sum("signups"), cancellations: sum("cancellations"),
+        },
+        byPlan,
+      };
+    });
+  });
 };

@@ -6,7 +6,7 @@ import { EmptyState, ErrorAlert, Loading, PageHeader, Panel, TextField } from ".
 import { csvMoney, downloadCsv, type CsvCell } from "../csv";
 import { formatDate } from "../units";
 
-const TABS = [["sales", "Sales"], ["payments", "Payments"], ["balances", "Balances"], ["packages", "Packages"], ["occupancy", "Occupancy"]] as const;
+const TABS = [["sales", "Sales"], ["payments", "Payments"], ["balances", "Balances"], ["packages", "Packages"], ["memberships", "Memberships"], ["occupancy", "Occupancy"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -63,6 +63,7 @@ export function ReportsPage() {
       {!rangeError && tab === "payments" && <Payments from={from} to={to} />}
       {tab === "balances" && <Balances />}
       {!rangeError && tab === "packages" && <PackagesView from={from} to={to} />}
+      {!rangeError && tab === "memberships" && <MembershipsView from={from} to={to} />}
       {!rangeError && tab === "occupancy" && <OccupancyView from={from} to={to} />}
     </>
   );
@@ -335,6 +336,58 @@ function PackagesView({ from, to }: { from: string; to: string }) {
             </table>
           </div>
         )}
+      </Panel>
+    </div>
+  );
+}
+
+interface MembershipsReport {
+  totals: { members: number; ending: number; monthlyRecurringCents: number; monthsBilled: number; revenueCents: number; daysIncluded: number; daysUsed: number; signups: number; cancellations: number };
+  byPlan: { plan: string; members: number; ending: number; monthsBilled: number; revenueCents: number; daysIncluded: number; daysUsed: number; signups: number; cancellations: number }[];
+}
+
+function MembershipsView({ from, to }: { from: string; to: string }) {
+  const q = useQuery({ queryKey: ["reports", "memberships", from, to], queryFn: () => get<MembershipsReport>(`/api/reports/memberships?from=${from}&to=${to}`) });
+  if (q.isPending) return <Loading />;
+  if (!q.data) return <ErrorAlert error={q.error} />;
+  const { totals, byPlan } = q.data;
+  const pct = (used: number, of: number) => (of ? `${Math.round((used / of) * 100)}%` : "—");
+  const csv = () => [
+    ["Plan", "Members now", "Ending", "Months billed", "Billed", "Days included", "Days used", "Sign-ups", "Cancellations"],
+    ...byPlan.map((p) => [p.plan, p.members, p.ending, p.monthsBilled, csvMoney(p.revenueCents), p.daysIncluded, p.daysUsed, p.signups, p.cancellations]),
+    [],
+    ["Monthly fees of continuing members", csvMoney(totals.monthlyRecurringCents)],
+  ];
+  return (
+    <div className="stack">
+      <div className="stats" style={{ marginBottom: 0 }}>
+        <Stat label="Members now" value={totals.members} />
+        <Stat label="Monthly fees (continuing)" value={formatMoney(totals.monthlyRecurringCents)} />
+        <Stat label="Billed in period" value={formatMoney(totals.revenueCents)} />
+        <Stat label="Included days used" value={`${totals.daysUsed} of ${totals.daysIncluded}`} />
+        <Stat label="Sign-ups / cancellations" value={`${totals.signups} / ${totals.cancellations}`} />
+      </div>
+      <Panel title="By plan" actions={<CsvButton filename={`memberships-${from}-to-${to}.csv`} rows={csv} />} bodyless>
+        {byPlan.length === 0 ? <EmptyState title="No memberships yet" /> : (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Plan</th><th scope="col" style={right}>Members</th><th scope="col" style={right}>Months billed</th>
+                <th scope="col" style={right}>Billed</th><th scope="col" style={right}>Days used</th><th scope="col" style={right}>Sign-ups</th><th scope="col" style={right}>Cancellations</th></tr></thead>
+              <tbody>{byPlan.map((p) => (
+                <tr key={p.plan}>
+                  <td>{p.plan}</td><td style={right}>{p.members}{p.ending > 0 && <span className="muted"> ({p.ending} ending)</span>}</td>
+                  <td style={right}>{p.monthsBilled}</td><td style={right}>{formatMoney(p.revenueCents)}</td>
+                  <td style={right}>{p.daysUsed} of {p.daysIncluded} <span className="muted">({pct(p.daysUsed, p.daysIncluded)})</span></td>
+                  <td style={right}>{p.signups}</td><td style={right}>{p.cancellations}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+        <p className="muted panel-body" style={{ margin: 0 }}>
+          Members now includes memberships that are cancelled but still in their paid month ("ending"); monthly fees leave those out.
+          Months billed, days included and days used count months that start in the period.
+        </p>
       </Panel>
     </div>
   );

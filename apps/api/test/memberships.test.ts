@@ -175,3 +175,40 @@ describe("tenant isolation", () => {
     expect((await outsider.post("/api/memberships/bill-due")).json().billed).toEqual([]);
   });
 });
+
+describe("memberships report", () => {
+  it("counts members, monthly fees, months billed, days used, sign-ups and cancellations", async () => {
+    const o = await createOrg(ctx.ownerDb, ["owner", "front_desk"]);
+    const boss = await login(ctx.app, o.users.owner!.email);
+    const fd = await login(ctx.app, o.users.front_desk!.email);
+    const full = (await boss.post("/api/services", { name: "Daycare — Full Day", category: "daycare", priceCents: 3800, priceUnit: "per_day" })).json().id;
+    await boss.put("/api/settings/billing", {
+      boardingMode: "nights", boardingExtraTime: "daycare", halfDayMaxHours: 5, gracePeriodMinutes: 30, daytimeStart: "07:00", daytimeEnd: "19:00",
+      daycareFullServiceId: full, daycareHalfServiceId: null, additionalPetDiscountBps: 0,
+    });
+    const plan = (await boss.post("/api/membership-plans", { name: "Club", covers: "full_day", daysPerMonth: 8, priceCents: 28000 })).json().id;
+    const small = (await boss.post("/api/membership-plans", { name: "Lite", covers: "full_day", daysPerMonth: 4, priceCents: 15000 })).json().id;
+    const people: string[] = [];
+    for (const name of ["Ann", "Ben", "Cal"]) people.push((await fd.post("/api/customers", { firstName: name, lastName: "Report" })).json().id);
+    await fd.post(`/api/customers/${people[0]}/memberships`, { planId: plan });
+    await fd.post(`/api/customers/${people[1]}/memberships`, { planId: plan });
+    const lite = (await fd.post(`/api/customers/${people[2]}/memberships`, { planId: small })).json().membership.id;
+    await fd.post(`/api/memberships/${lite}/cancel`, { reason: "Too few days" });
+    // Ann uses one included day.
+    const dog = (await fd.post("/api/pets", { customerId: people[0], name: "Dot", species: "dog" })).json().id;
+    const r = (await fd.post("/api/reservations", {
+      customerId: people[0], locationId: o.locationId, serviceId: full, petIds: [dog], startsAt: t(addDays(today, 1), "08:00"), endsAt: t(addDays(today, 1), "17:00"), status: "confirmed",
+    })).json();
+    await fd.post(`/api/reservations/${r.id}/invoice`);
+
+    expect((await fd.get(`/api/reports/memberships?from=${today}&to=${today}`)).statusCode).toBe(403);
+    const rep = (await boss.get(`/api/reports/memberships?from=${today}&to=${today}`)).json();
+    expect(rep.totals).toEqual({
+      members: 3, ending: 1, monthlyRecurringCents: 56000, monthsBilled: 3, revenueCents: 71000,
+      daysIncluded: 20, daysUsed: 1, signups: 3, cancellations: 1,
+    });
+    expect(rep.byPlan.map((p: { plan: string; members: number }) => [p.plan, p.members])).toEqual([["Club", 2], ["Lite", 1]]);
+    expect((await boss.get(`/api/reports/memberships?from=${addDays(today, -30)}&to=${addDays(today, -1)}`)).json().totals)
+      .toMatchObject({ monthsBilled: 0, signups: 0, cancellations: 0, members: 3 });
+  });
+});
