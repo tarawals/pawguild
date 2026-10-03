@@ -83,10 +83,21 @@ async function describeMembership(trx: Tx, orgId: string, m: MembershipRow & { c
 }
 
 /** How many memberships have a month due to be billed. */
+/** How many memberships have a month due to be billed (one query; this runs with every notification check). */
 export async function countDueMemberships(trx: Tx, orgId: string): Promise<number> {
-  const rows = await trx.selectFrom("customerMemberships").select([...membershipColumns]).execute();
+  const rows = await sql<{ startedOn: string; endsOn: string | null; cancelled: boolean; billed: number; timezone: string }>`
+    select cm.started_on::text as started_on, cm.ends_on::text as ends_on, cm.cancelled_at is not null as cancelled,
+           (select count(*) from membership_periods mp where mp.customer_membership_id = cm.id)::int as billed,
+           coalesce(l.timezone, o.timezone) as timezone
+      from customer_memberships cm join locations l on l.id = cm.location_id join organizations o on o.id = cm.organization_id
+     where cm.organization_id = ${orgId}`.execute(trx);
+  const todayIn = new Map<string, string>();
   let due = 0;
-  for (const m of rows) if ((await describeMembership(trx, orgId, m)).due) due++;
+  for (const m of rows.rows) {
+    if (m.billed === 0 && m.cancelled) continue; // cancelled before the first bill
+    if (!todayIn.has(m.timezone)) todayIn.set(m.timezone, calendarDate(new Date(), m.timezone));
+    if (duePeriods(m.startedOn, m.billed, todayIn.get(m.timezone)!, m.endsOn).length > 0) due++;
+  }
   return due;
 }
 

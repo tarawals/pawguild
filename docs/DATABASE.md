@@ -242,6 +242,14 @@ price. `package_redemptions` now records a day against either a package or a mem
 (exactly one). Included days only cover daycare dates inside their month and don't roll over;
 membership days are used before packages. A month whose invoice is voided can't be used.
 
+## 0019_redemption_guard
+
+A `BEFORE INSERT` trigger on `package_redemptions` (`package_redemptions_guard()`) checks, as defense
+in depth behind the API, that the day comes from the invoice customer's own package or membership
+month, that `used_on` is inside the package's expiry or the month's period, and that the invoice
+line belongs to the invoice. It runs as the caller, so its lookups are still limited by RLS to the
+current organization. Violations raise `P0001`.
+
 ## Conventions
 
 - Money: `bigint` integer cents (see ADR 0003). Never `numeric` or float in application code.

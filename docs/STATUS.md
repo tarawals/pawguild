@@ -45,14 +45,17 @@ _Last updated: 2026-10-03 (session 18: memberships)_
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results (2026-10-03): typecheck ✅, 66 shared unit tests ✅, 216 API integration tests ✅,
+Latest check results (2026-10-03): typecheck ✅, 66 shared unit tests ✅, 217 API integration tests ✅,
 7 web tests ✅, 53 Playwright e2e tests ✅.
 Fixed this session: drafting an invoice from a reservation could deadlock with a booking at the same
 location (the invoice locked the service row). Row locks now use FOR NO KEY UPDATE throughout.
+Review pass: the membership "due" count (run on every notification poll) is now one query instead of
+one per membership, and the database now refuses a prepaid-day redemption for another customer's
+package or membership, or for a date the package or month doesn't cover (migration 0019).
 
 ## Not built yet (in scope, by priority)
 
-1. More reports (tax by rate, staff activity) (e.g. tax by rate, staff activity), internal notifications, business settings UI
+1. More reports (tax by rate, staff activity), internal notifications, business settings UI
 3. Waitlists, pet photos
 
 ## Test coverage beyond feature tests
@@ -116,6 +119,8 @@ location (the invoice locked the service row). Row locks now use FOR NO KEY UPDA
   (a notification says when months are due). Each month is a separate invoice to collect, since the
   app takes no card payments. A membership's days for next month exist only once that month is billed.
 - A membership can't be changed to another plan in place: cancel and sign up again.
+- Voiding a membership month's invoice waives that month: it can't be billed again (one month per
+  start date), and its included days can't be used.
 - Notifications have no read or snooze state: an item stays until the problem is resolved. There is
   no email, text or push delivery (in-app only, per current scope).
 - Changing the business time zone doesn't move existing bookings (they keep their exact times),

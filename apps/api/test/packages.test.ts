@@ -1,5 +1,6 @@
 import { addDays, calendarDate, zonedDateTime } from "@pawguild/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { withTenant } from "../src/db";
 import { createOrg, login, setupTestApp } from "./helpers";
 
 let ctx: Awaited<ReturnType<typeof setupTestApp>>;
@@ -229,6 +230,22 @@ describe("selling and using packages", () => {
       organizationId: org.orgId, customerPackageId: sold.packageId, invoiceId: inv.id, invoiceLineId: withLine.lines[0].id, usedOn: today,
     }).execute();
     expect((await items(desk)).find((i) => i.kind === "package_last_day")).toMatchObject({ title: "Last day on package: Pat Package — 2 Full Days" });
+  });
+
+  it("the database refuses to spend another customer's days or an expired package's", async () => {
+    const [pkg] = (await balances()).filter((p) => p.status !== "void");
+    const stranger = (await desk.post("/api/customers", { firstName: "Not", lastName: "Theirs" })).json().id;
+    const inv = (await desk.post("/api/invoices", { customerId: stranger, locationId: org.locationId })).json();
+    const line = (await desk.post(`/api/invoices/${inv.id}/lines`, { description: "x", quantity: 1, unitPriceCents: 0 })).json().lines[0].id;
+    const tenant = { orgId: org.orgId, userId: org.users.owner!.id };
+    const insert = (values: object) => withTenant(ctx.db, tenant, (trx) => trx.insertInto("packageRedemptions").values({
+      organizationId: org.orgId, customerPackageId: pkg!.id, invoiceId: inv.id, invoiceLineId: line, usedOn: today, ...values,
+    } as never).execute());
+    await expect(insert({})).rejects.toThrow(/only be used for the customer they belong to/);
+    const own = (await desk.post("/api/invoices", { customerId, locationId: org.locationId })).json();
+    const ownLine = (await desk.post(`/api/invoices/${own.id}/lines`, { description: "x", quantity: 1, unitPriceCents: 0 })).json().lines[0].id;
+    await expect(insert({ invoiceId: own.id, invoiceLineId: ownLine, usedOn: day(400) })).rejects.toThrow(/only be used for dates they cover/);
+    await expect(insert({ invoiceId: own.id, invoiceLineId: line })).rejects.toThrow(/belong to a line of its invoice/);
   });
 
   it("other organizations can't sell our packages or see our customers' balances", async () => {
