@@ -79,6 +79,7 @@ export function MembershipPlansPanel() {
         A monthly fee with included days of daycare. Billed on the sign-up date, then the same day each month, at full price. Unused days don't roll over;
         a cancelled membership runs to the end of the paid month.
       </p>
+      {list.error && <div className="panel-body"><ErrorAlert error={list.error} /></div>}
       {editing === "new" && <div className="panel-body"><PlanForm onDone={() => setEditing(null)} /></div>}
       {list.isPending ? <div className="panel-body"><Loading /></div> : list.data && (list.data.items.length === 0
         ? <EmptyState title="No membership plans yet">{canManage ? "Add one, like 8 full days a month for a set price." : "An owner or administrator can add them."}</EmptyState>

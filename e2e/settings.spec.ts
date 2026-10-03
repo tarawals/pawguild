@@ -76,3 +76,12 @@ test("front desk can see the settings but not change them", async ({ page }) => 
   await expect(page.getByRole("region", { name: "Business details" })).toContainText("America/New York");
   await expect(page.getByRole("button", { name: "Save settings" })).toHaveCount(0);
 });
+
+test("care staff don't see package or membership prices in the settings", async ({ page }) => {
+  await signIn(page, "care@harborhounds.example");
+  await page.goto("/settings");
+  await expect(page.getByRole("region", { name: "Business details" })).toContainText("America/New York");
+  await expect(page.getByRole("region", { name: "Daycare packages" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Membership plans" })).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});

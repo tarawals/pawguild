@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-10-03 (session 18: memberships)_
+_Last updated: 2026-10-03 (session 18: memberships and review pass)_
 
 ## Built and tested
 
@@ -46,12 +46,17 @@ _Last updated: 2026-10-03 (session 18: memberships)_
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
 Latest check results (2026-10-03): typecheck ✅, 66 shared unit tests ✅, 217 API integration tests ✅,
-7 web tests ✅, 53 Playwright e2e tests ✅.
+7 web tests ✅, 58 Playwright e2e tests ✅ (including 4 axe accessibility scans).
 Fixed this session: drafting an invoice from a reservation could deadlock with a booking at the same
 location (the invoice locked the service row). Row locks now use FOR NO KEY UPDATE throughout.
 Review pass: the membership "due" count (run on every notification poll) is now one query instead of
 one per membership, and the database now refuses a prepaid-day redemption for another customer's
 package or membership, or for a date the package or month doesn't cover (migration 0019).
+Every page (and the customer, pet, reservation and invoice detail pages) now passes an automated
+WCAG 2.1 AA scan (axe), run after the feature tests so pages are full of data. Visiting every page
+as owner, front desk, care staff and groomer found one problem: care staff and groomers opening
+Business settings saw empty package and plan panels (they can't read prices). Those panels are now
+shown only to staff with billing access, and show an error if they fail to load.
 
 ## Not built yet (in scope, by priority)
 
@@ -139,7 +144,7 @@ package or membership, or for a date the package or month doesn't cover (migrati
 
 ## Next recommended step
 
-**Membership and package reporting, then a review pass:** add memberships to Reports (active
-members, monthly recurring revenue, included days used vs. available, cancellations). Then a
-broad review of the whole app (security review of the newest billing code, accessibility check of
-the newest pages, and a hands-on pass through a full day as each role) before adding more features.
+**Pick the next feature from "Not built yet"** (more reports such as tax by rate and staff
+activity, or waitlists and pet photos). The review pass is done: billing security, accessibility
+scans, and a page-by-page pass as each role. A manual screen-reader and keyboard-only pass is still
+worth doing before launch; automated scans catch only part of accessibility problems.

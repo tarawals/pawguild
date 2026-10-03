@@ -82,6 +82,7 @@ export function PackageProductsPanel() {
       <p className="muted panel-body" style={{ margin: 0, paddingBottom: 0 }}>
         Prepaid days of daycare. When daycare is invoiced, full or half days are taken from the customer's package before anything is charged.
       </p>
+      {list.error && <div className="panel-body"><ErrorAlert error={list.error} /></div>}
       {editing === "new" && <div className="panel-body"><ProductForm onDone={() => setEditing(null)} /></div>}
       {list.isPending ? <div className="panel-body"><Loading /></div> : list.data && (list.data.items.length === 0
         ? <EmptyState title="No packages yet">{canManage ? "Add one, like 10 full days for a set price." : "An owner or administrator can add them."}</EmptyState>

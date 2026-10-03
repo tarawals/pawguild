@@ -22,6 +22,11 @@ export default defineConfig({
       launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE },
     }),
   },
+  projects: [
+    { name: "features", testIgnore: /a11y\.spec\.ts/ },
+    // The accessibility scan runs after the feature tests, so pages show the data they created.
+    { name: "a11y", testMatch: /a11y\.spec\.ts/, dependencies: ["features"] },
+  ],
   webServer: [
     {
       command: "npm run start -w @pawguild/api",

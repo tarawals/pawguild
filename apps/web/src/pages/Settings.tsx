@@ -19,6 +19,7 @@ const TIME_ZONES: string[] = (() => {
 export function SettingsPage() {
   const qc = useQueryClient();
   const canManage = useCan("settings:manage");
+  const canSeeBilling = useCan("billing:read");
   const settings = useQuery({ queryKey: ["settings", "organization"], queryFn: () => get<OrgSettings>("/api/settings/organization") });
   const [form, setForm] = useState({ name: "", email: "", phone: "", timezone: "" });
   const [saved, setSaved] = useState(false);
@@ -91,8 +92,9 @@ export function SettingsPage() {
         )}
       </Panel>
       <div style={{ marginTop: 16 }}><BillingRulesPanel /></div>
-      <div style={{ marginTop: 16 }}><PackageProductsPanel /></div>
-      <div style={{ marginTop: 16 }}><MembershipPlansPanel /></div>
+      {/* Prices of packages and plans are billing information. */}
+      {canSeeBilling && <div style={{ marginTop: 16 }}><PackageProductsPanel /></div>}
+      {canSeeBilling && <div style={{ marginTop: 16 }}><MembershipPlansPanel /></div>}
     </>
   );
 }
