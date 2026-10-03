@@ -300,11 +300,56 @@ export interface CustomerPackagesTable {
 export interface PackageRedemptionsTable {
   id: Generated<string>;
   organizationId: string;
-  customerPackageId: string;
+  customerPackageId: string | null;
+  membershipPeriodId: string | null;
   invoiceId: string;
   invoiceLineId: string;
   reservationId: string | null;
   usedOn: DateString;
+  createdAt: CreatedAt;
+}
+
+export interface MembershipPlansTable {
+  id: Generated<string>;
+  organizationId: string;
+  name: string;
+  covers: string;
+  daysPerMonth: number;
+  priceCents: number;
+  isTaxable: Generated<boolean>;
+  isActive: Generated<boolean>;
+  createdAt: CreatedAt;
+  updatedAt: Generated<Date>;
+}
+
+export interface CustomerMembershipsTable {
+  id: Generated<string>;
+  organizationId: string;
+  customerId: string;
+  planId: string;
+  locationId: string;
+  name: string;
+  covers: string;
+  daysPerMonth: number;
+  priceCents: number;
+  isTaxable: boolean;
+  startedOn: DateString;
+  endsOn: DateString | null;
+  cancelledAt: Date | null;
+  cancelledByUserId: string | null;
+  cancelReason: string | null;
+  createdByUserId: string;
+  createdAt: CreatedAt;
+}
+
+export interface MembershipPeriodsTable {
+  id: Generated<string>;
+  organizationId: string;
+  customerMembershipId: string;
+  periodStart: DateString;
+  periodEnd: DateString;
+  days: number;
+  invoiceId: string;
   createdAt: CreatedAt;
 }
 
@@ -527,6 +572,9 @@ export interface Database {
   packageProducts: PackageProductsTable;
   customerPackages: CustomerPackagesTable;
   packageRedemptions: PackageRedemptionsTable;
+  membershipPlans: MembershipPlansTable;
+  customerMemberships: CustomerMembershipsTable;
+  membershipPeriods: MembershipPeriodsTable;
   locationClosures: LocationClosuresTable;
   resources: ResourcesTable;
   serviceVaccineRequirements: ServiceVaccineRequirementsTable;

@@ -13,6 +13,7 @@ import { occupancy } from "../lib/capacity";
 import { todaysDoses } from "../lib/care";
 import { reservationVaccinationChecks } from "../lib/vaccinations";
 import { billingSummary } from "./billing";
+import { countDueMemberships } from "./memberships";
 
 export type Severity = "high" | "medium" | "low";
 export interface Notification {
@@ -147,6 +148,18 @@ export async function buildNotifications(trx: Tx, auth: AuthContext, now = new D
         title: `${overpaidInvoices} overpaid invoice${overpaidInvoices === 1 ? "" : "s"}`,
         detail: can("billing:refund") ? "Refund the difference or move it to account credit." : "A manager needs to refund or move it to account credit.",
         link: "/invoices?status=overpaid", at: null,
+      });
+    }
+  }
+
+  // Membership months due to be billed (staff issue the invoices with "Bill due memberships").
+  if (can("billing:write")) {
+    const due = await countDueMemberships(trx, auth.orgId);
+    if (due > 0) {
+      items.push({
+        id: "memberships:due", kind: "memberships_due", severity: "medium",
+        title: `${due} membership${due === 1 ? "" : "s"} due to be billed`, detail: "Bill them on the Memberships page; each month gets its own invoice.",
+        link: "/memberships", at: null,
       });
     }
   }

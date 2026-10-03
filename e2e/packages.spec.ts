@@ -16,7 +16,7 @@ test("owner sets up a half-day package with its own expiry", async ({ page }) =>
   await signIn(page, "owner@harborhounds.example");
   await page.goto("/settings");
   const panel = page.getByRole("region", { name: "Daycare packages" });
-  await expect(panel.getByRole("row", { name: /10 Full Days/ })).toContainText("Expires 90 days after purchase");
+  await expect(panel.getByRole("row", { name: /10 Full Days/ })).toContainText("Expires 1 year after purchase");
   await panel.getByRole("button", { name: "Add package" }).click();
   const form = panel.getByRole("form", { name: "New package" });
   await form.getByLabel("Package name").fill("5 Half Days");
@@ -35,7 +35,7 @@ test("front desk sells a package and daycare uses it instead of charging", async
   await page.goto("/customers");
   await page.getByRole("link", { name: "Brooks, Casey" }).click();
   const packages = page.getByRole("region", { name: "Packages" });
-  await packages.getByLabel("Package to sell").selectOption({ label: "10 Full Days — $340.00 (10 full days, expires 90 days after purchase)" });
+  await packages.getByLabel("Package to sell").selectOption({ label: "10 Full Days — $340.00 (10 full days, expires 1 year after purchase)" });
   await packages.getByRole("button", { name: "Sell" }).click();
   await expect(packages.getByRole("status")).toContainText("Sold 10 Full Days.");
   await expect(packages.getByRole("list", { name: "Customer packages" })).toContainText("10 of 10 full days left");

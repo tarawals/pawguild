@@ -11,7 +11,7 @@ import type { AuthContext } from "../lib/auth-context";
 import { recordAudit } from "../lib/audit";
 import { locationTimezone } from "../lib/capacity";
 import { getBillingRules, priceReservation } from "../lib/billing-rules";
-import { packageBalances, writeStayLines } from "../lib/packages";
+import { prepaidSources, writeStayLines } from "../lib/packages";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors";
 import { idParam } from "../lib/params";
 
@@ -73,19 +73,20 @@ export async function loadInvoice(trx: Tx, id: string) {
   const { firstName, lastName, email, phone, locationName, locationTaxRateBps: _l, subtotalCents: _s, discountCents: _d, taxCents: _t, totalCents: _tt, usePackages, ...rest } = inv;
   // Prepaid package days on this invoice, what's left on each package, and whether staff can still
   // turn packages on or off.
-  const usedRows = await trx.selectFrom("packageRedemptions as r")
-    .select("r.customerPackageId").select((eb) => eb.fn.countAll<number>().as("days"))
-    .where("r.invoiceId", "=", id).groupBy("r.customerPackageId").execute();
-  const daysUsed = usedRows.reduce((n, u) => n + Number(u.days), 0);
+  const usedRows = (await trx.selectFrom("packageRedemptions as r")
+    .select(["r.customerPackageId", "r.membershipPeriodId"]).select((eb) => eb.fn.countAll<number>().as("days"))
+    .where("r.invoiceId", "=", id).groupBy(["r.customerPackageId", "r.membershipPeriodId"]).execute())
+    .map((u) => ({ sourceId: (u.customerPackageId ?? u.membershipPeriodId)!, days: Number(u.days) }));
+  const daysUsed = usedRows.reduce((n, u) => n + u.days, 0);
   const hasStayLines = lines.some((l) => l.stayLine);
   const balances = hasStayLines || daysUsed > 0
-    ? await packageBalances(trx, inv.customerId, calendarDate(new Date(), await locationTimezone(trx, inv.locationId))) : [];
-  const describe = (p: (typeof balances)[number]) => ({ name: p.name, covers: p.covers, remaining: p.remaining, days: p.days, expiresOn: p.expiresOn });
+    ? await prepaidSources(trx, inv.customerId, calendarDate(new Date(), await locationTimezone(trx, inv.locationId))) : [];
+  const describe = (p: (typeof balances)[number]) => ({ name: p.name, kind: p.kind, covers: p.covers, remaining: p.remaining, days: p.days, expiresOn: p.validTo });
   const usedFrom = usedRows.map((u) => {
-    const p = balances.find((b) => b.id === u.customerPackageId)!;
-    return { ...describe(p), days: Number(u.days), packageDays: p.days };
+    const p = balances.find((b) => b.id === u.sourceId)!;
+    return { ...describe(p), days: u.days, packageDays: p.days };
   }).sort((a, b) => a.name.localeCompare(b.name));
-  const available = balances.filter((p) => p.status === "active").map(describe);
+  const available = balances.filter((p) => p.status === "active" && p.remaining > 0).map(describe);
   return {
     ...rest,
     taxRateBps: rate,

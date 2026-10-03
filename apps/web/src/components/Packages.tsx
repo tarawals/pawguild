@@ -17,7 +17,8 @@ interface CustomerPackage {
 }
 
 const EXPIRY_CHOICES: [string, string][] = [["", "Never expires"], ["30", "30 days"], ["60", "60 days"], ["90", "90 days"], ["180", "6 months (180 days)"], ["365", "1 year (365 days)"], ["custom", "Custom…"]];
-export const expiryText = (days: number | null) => days === null ? "Never expires" : `Expires ${days} days after purchase`;
+export const expiryText = (days: number | null) => days === null ? "Never expires"
+  : days % 365 === 0 ? `Expires ${days / 365} year${days === 365 ? "" : "s"} after purchase` : `Expires ${days} days after purchase`;
 const dayWord = (covers: PackageCovers, n: number) => `${covers === "full_day" ? "full" : "half"} day${n === 1 ? "" : "s"}`;
 
 function ProductForm({ product, onDone }: { product?: PackageProduct; onDone: () => void }) {
@@ -25,7 +26,7 @@ function ProductForm({ product, onDone }: { product?: PackageProduct; onDone: ()
   const preset = product?.expiresAfterDays == null ? "" : EXPIRY_CHOICES.some(([v]) => v === String(product.expiresAfterDays)) ? String(product.expiresAfterDays) : "custom";
   const [f, setF] = useState({
     name: product?.name ?? "", covers: product?.covers ?? "full_day" as PackageCovers, days: String(product?.days ?? 10),
-    price: product ? (product.priceCents / 100).toFixed(2) : "", expiry: product ? preset : "90", customDays: product?.expiresAfterDays ? String(product.expiresAfterDays) : "",
+    price: product ? (product.priceCents / 100).toFixed(2) : "", expiry: product ? preset : "365", customDays: product?.expiresAfterDays ? String(product.expiresAfterDays) : "",
     isTaxable: product?.isTaxable ?? false, isActive: product?.isActive ?? true,
   });
   const save = useMutation({

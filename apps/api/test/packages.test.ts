@@ -165,8 +165,8 @@ describe("selling and using packages", () => {
     ]);
     expect(off.packages).toMatchObject({ usePackages: false, daysUsed: 0, usedFrom: [], canChange: true });
     expect(off.packages.available).toEqual(expect.arrayContaining([
-      { name: "10 Full Days", covers: "full_day", days: 10, remaining: 10, expiresOn: day(365) },
-      { name: "5 Half Days", covers: "half_day", days: 5, remaining: 4, expiresOn: null },
+      { name: "10 Full Days", kind: "package", covers: "full_day", days: 10, remaining: 10, expiresOn: day(365) },
+      { name: "5 Half Days", kind: "package", covers: "half_day", days: 5, remaining: 4, expiresOn: null },
     ]));
     expect(await left()).toBe(10);
 

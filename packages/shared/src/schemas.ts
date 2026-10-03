@@ -515,3 +515,20 @@ export const sellPackageInput = z.object({
   /** Where the sale is invoiced; defaults to the first active location. */
   locationId: z.uuid().optional(),
 });
+
+export const membershipPlanInput = z.object({
+  name: z.string().trim().min(1, "Plan name is required").max(100),
+  covers: z.enum(PACKAGE_COVERS),
+  daysPerMonth: z.number().int("Whole days").min(1, "At least 1 day").max(31, "At most 31 days"),
+  priceCents: z.number().int("Amounts are in whole cents").min(0, "Price can't be negative").max(100_000_000),
+  isTaxable: z.boolean().default(false),
+  isActive: z.boolean().optional(),
+});
+export const membershipPlanUpdateInput = membershipPlanInput.partial();
+export const membershipSignupInput = z.object({
+  planId: z.uuid(),
+  /** The first billing date; defaults to today. Later months bill on the same day. */
+  startsOn: isoDate.optional(),
+  locationId: z.uuid().optional(),
+});
+export const membershipCancelInput = z.object({ reason: optionalText(500) });

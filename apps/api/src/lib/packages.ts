@@ -28,9 +28,46 @@ export async function packageBalances(trx: Tx, customerId: string, today: string
   });
 }
 
+/** A source of prepaid daycare days: a package, or one month of a membership. */
+export interface PrepaidSource {
+  kind: "package" | "membership";
+  id: string; name: string; covers: "full_day" | "half_day"; days: number; remaining: number;
+  /** Days can be used for daycare dates in this range (null = open-ended). */
+  validFrom: string | null; validTo: string | null;
+  status: "active" | "used_up" | "expired" | "void" | "upcoming";
+}
+
+/** One row per billed membership month, with what's left. Months billed on void invoices are void. */
+export async function membershipPeriodBalances(trx: Tx, customerId: string, today: string): Promise<PrepaidSource[]> {
+  const rows = await sql<{ id: string; name: string; covers: string; days: number; periodStart: string; periodEnd: string; invoiceStatus: string; used: number }>`
+    select mp.id, cm.name, cm.covers, mp.days, mp.period_start::text as period_start, mp.period_end::text as period_end, i.status as invoice_status,
+           (select count(*) from package_redemptions r join invoices ri on ri.id = r.invoice_id
+             where r.membership_period_id = mp.id and ri.status <> 'void')::int as used
+      from membership_periods mp join customer_memberships cm on cm.id = mp.customer_membership_id join invoices i on i.id = mp.invoice_id
+     where cm.customer_id = ${customerId}
+     order by mp.period_end, mp.id`.execute(trx);
+  return rows.rows.map((r) => {
+    const remaining = Math.max(0, r.days - r.used);
+    const status = r.invoiceStatus === "void" ? "void" : remaining === 0 ? "used_up" : r.periodEnd < today ? "expired" : r.periodStart > today ? "upcoming" : "active";
+    return { kind: "membership" as const, id: r.id, name: `${r.name} membership`, covers: r.covers as PrepaidSource["covers"], days: r.days, remaining,
+      validFrom: r.periodStart, validTo: r.periodEnd, status };
+  });
+}
+
+/** Membership months first (they don't roll over), then packages soonest-expiring first. */
+export async function prepaidSources(trx: Tx, customerId: string, today: string, lock = false): Promise<PrepaidSource[]> {
+  const packages = await packageBalances(trx, customerId, today, lock);
+  const months = await membershipPeriodBalances(trx, customerId, today);
+  return [
+    ...months,
+    ...packages.map((p) => ({ kind: "package" as const, id: p.id, name: p.name, covers: p.covers, days: p.days, remaining: p.remaining,
+      validFrom: null, validTo: p.expiresOn, status: p.status })),
+  ];
+}
+
 /**
  * Write a priced stay onto a draft invoice. Daycare days (full or half) are paid from the
- * customer's packages first (soonest-expiring first, only on days before each package expires);
+ * customer's membership months and packages first (see prepaidSources; only for dates each covers);
  * those days go on their own $0 "prepaid" line with a redemption per day. The rest is charged.
  */
 export async function writeStayLines(trx: Tx, auth: AuthContext, args: {
@@ -44,7 +81,10 @@ export async function writeStayLines(trx: Tx, auth: AuthContext, args: {
   const pets = Math.max(1, petNames.length);
   const needsPackages = args.usePackages !== false && priced.lines.some((l) => (l.kind === "daycare_full" || l.kind === "daycare_half") && l.dates);
   // Locked so two invoices for the same customer can't spend the same package days.
-  const packages = needsPackages ? (await packageBalances(trx, args.customerId, args.today, true)).filter((p) => p.status === "active") : [];
+  // Upcoming membership months count too: a stay next month is covered by next month's days once billed.
+  const packages = needsPackages
+    ? (await prepaidSources(trx, args.customerId, args.today, true)).filter((p) => p.remaining > 0 && (p.status === "active" || p.status === "upcoming"))
+    : [];
   const left = new Map(packages.map((p) => [p.id, p.remaining]));
   let position = 0;
   const insertLine = async (values: { serviceId: string | null; description: string; quantity: number; unitPriceCents: number; discountCents: number; taxable: boolean }) =>
@@ -57,7 +97,8 @@ export async function writeStayLines(trx: Tx, auth: AuthContext, args: {
     const units = covers && line.dates ? line.dates.flatMap((d) => Array.from({ length: pets }, () => d)) : [];
     const used = new Map<string, string[]>();
     for (const date of units) {
-      const pkg = packages.find((p) => p.covers === covers && (left.get(p.id) ?? 0) > 0 && (!p.expiresOn || date <= p.expiresOn));
+      const pkg = packages.find((p) => p.covers === covers && (left.get(p.id) ?? 0) > 0
+        && (!p.validFrom || date >= p.validFrom) && (!p.validTo || date <= p.validTo));
       if (!pkg) continue;
       left.set(pkg.id, left.get(pkg.id)! - 1);
       used.set(pkg.id, [...(used.get(pkg.id) ?? []), date]);
@@ -81,7 +122,8 @@ export async function writeStayLines(trx: Tx, auth: AuthContext, args: {
         description: `${line.label} — ${names} (${dates.length} day${dates.length === 1 ? "" : "s"} prepaid: ${pkg.name})`,
       });
       await trx.insertInto("packageRedemptions").values(dates.map((usedOn) => ({
-        organizationId: auth.orgId, customerPackageId: pkgId, invoiceId, invoiceLineId: lineId, reservationId: args.reservationId, usedOn,
+        organizationId: auth.orgId, invoiceId, invoiceLineId: lineId, reservationId: args.reservationId, usedOn,
+        customerPackageId: pkg.kind === "package" ? pkgId : null, membershipPeriodId: pkg.kind === "membership" ? pkgId : null,
       }))).execute();
     }
   }

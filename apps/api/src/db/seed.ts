@@ -57,8 +57,8 @@ export async function seed(connectionString: string, password: string) {
         daycareHalfServiceId: services.find((s) => s.name === "Daycare — Half Day")!.id,
       }).execute();
       await trx.insertInto("packageProducts").values([
-        { organizationId: org.id, name: "10 Full Days", covers: "full_day", days: 10, priceCents: 34000, expiresAfterDays: 90 },
-        { organizationId: org.id, name: "10 Half Days", covers: "half_day", days: 10, priceCents: 23000, expiresAfterDays: 90 },
+        { organizationId: org.id, name: "10 Full Days", covers: "full_day", days: 10, priceCents: 34000, expiresAfterDays: 365 },
+        { organizationId: org.id, name: "10 Half Days", covers: "half_day", days: 10, priceCents: 23000, expiresAfterDays: 365 },
       ]).execute();
       // Typical requirements: daycare/boarding need core vaccines plus Bordetella; grooming needs Rabies.
       const requirement = (serviceId: string, species: string, vaccine: string) => ({ organizationId: org.id, serviceId, species, vaccine });
