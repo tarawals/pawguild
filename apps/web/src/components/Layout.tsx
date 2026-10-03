@@ -34,6 +34,7 @@ export function Layout() {
           <div className="nav-section">Clients</div>
           {canReadCustomers && <NavLink to="/customers">Customers</NavLink>}
           {canReadPets && <NavLink to="/pets">Pets</NavLink>}
+          {canReadBilling && <NavLink to="/memberships">Memberships</NavLink>}
           {canReadReservations && (
             <>
               <div className="nav-section">Business</div>

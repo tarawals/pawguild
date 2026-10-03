@@ -52,13 +52,13 @@ test("front desk sells a package and daycare uses it instead of charging", async
   await expect(charges.getByRole("row", { name: /^Total/ })).toContainText("$0.00");
 
   // The package is used automatically, but can be taken off (and put back) while it's a draft.
-  const prepaid = charges.getByRole("group", { name: "Prepaid package" });
-  await expect(prepaid).toContainText(/Prepaid package: 1 day from 10 Full Days — 9 full days left, use by \w{3} \d+, \d{4}\./);
-  await prepaid.getByRole("button", { name: "Don't use package" }).click();
-  await expect(prepaid).toContainText(/Package not used on this invoice\. Available: 10 Full Days \(10 full days left, use by/);
+  const prepaid = charges.getByRole("group", { name: "Prepaid days" });
+  await expect(prepaid).toContainText(/Prepaid: 1 day from 10 Full Days — 9 full days left, use by \w{3} \d+, \d{4}\./);
+  await prepaid.getByRole("button", { name: "Don't use prepaid days" }).click();
+  await expect(prepaid).toContainText(/Prepaid days not used on this invoice\. Available: 10 Full Days \(10 full days left, use by/);
   await expect(charges.getByRole("row", { name: /^Total/ })).toContainText("$38.00");
-  await prepaid.getByRole("button", { name: "Use package" }).click();
-  await expect(prepaid).toContainText("Prepaid package: 1 day from 10 Full Days — 9 full days left");
+  await prepaid.getByRole("button", { name: "Use prepaid days" }).click();
+  await expect(prepaid).toContainText("Prepaid: 1 day from 10 Full Days — 9 full days left");
   await expect(charges.getByRole("row", { name: /^Total/ })).toContainText("$0.00");
 
   await page.goto("/customers");

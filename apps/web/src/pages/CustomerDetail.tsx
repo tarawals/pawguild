@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { formatMoney } from "@pawguild/shared";
 import { get, invoiceLabel, post, type Customer, type Invoice, type InvoiceListItem, type Location, type ReservationListItem } from "../api";
 import { AccountCreditPanel } from "../components/AccountCredit";
+import { CustomerMembershipsPanel } from "../components/Memberships";
 import { CustomerPackagesPanel } from "../components/Packages";
 import { InvoiceStatusBadge } from "../components/InvoiceStatusBadge";
 import { useCan } from "../auth";
@@ -136,6 +137,7 @@ export function CustomerDetailPage() {
           </Panel>
           {c.billing && <CustomerInvoices customer={c} />}
           {c.billing && <AccountCreditPanel customerId={c.id} />}
+          {c.billing && <CustomerMembershipsPanel customerId={c.id} />}
           {c.billing && <CustomerPackagesPanel customerId={c.id} />}
           <CustomerReservations customerId={c.id} canBook={canBook && !archived && c.status !== "banned"} />
           <History entityType="customer" entityId={c.id} />

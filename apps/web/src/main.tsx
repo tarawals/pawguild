@@ -12,6 +12,7 @@ import { GroomingPage } from "./pages/Grooming";
 import { SchedulePage } from "./pages/Schedule";
 import { SettingsPage } from "./pages/Settings";
 import { NotificationsPage } from "./pages/Notifications";
+import { MembershipsPage } from "./pages/Memberships";
 import { IncidentsPage } from "./pages/Incidents";
 import { InvoiceDetailPage } from "./pages/InvoiceDetail";
 import { InvoicesPage } from "./pages/Invoices";
@@ -98,6 +99,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="schedule" element={<SchedulePage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="memberships" element={<MembershipsPage />} />
             <Route path="account/password" element={<ChangePasswordPage />} />
             <Route path="incidents" element={<IncidentsPage />} />
             <Route path="invoices" element={<InvoicesPage />} />

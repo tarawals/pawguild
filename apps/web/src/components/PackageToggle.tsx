@@ -25,17 +25,17 @@ export function PackageToggle({ invoiceId, packages, reservationId }: { invoiceI
   return (
     <div className="stack" style={{ gap: 6 }}>
       <ErrorAlert error={change.error} />
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }} role="group" aria-label="Prepaid package">
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }} role="group" aria-label="Prepaid days">
         <span>
           {packages.daysUsed > 0
-            ? <>Prepaid package: {packages.usedFrom.map((u, i) => (
+            ? <>Prepaid: {packages.usedFrom.map((u, i) => (
                 <span key={u.name}>{i > 0 && "; "}<strong>{u.days} day{u.days === 1 ? "" : "s"} from {u.name}</strong> — {left(u)}</span>
               ))}.</>
-            : <>Package not used on this invoice. Available: {packages.available.map((p) => `${p.name} (${left(p)})`).join("; ")}.</>}
+            : <>Prepaid days not used on this invoice. Available: {packages.available.map((p) => `${p.name} (${left(p)})`).join("; ")}.</>}
         </span>
         {packages.canChange && canBill && (
           <button className="btn btn-small" disabled={change.isPending} onClick={() => change.mutate(!packages.usePackages)}>
-            {packages.usePackages ? "Don't use package" : "Use package"}
+            {packages.usePackages ? "Don't use prepaid days" : "Use prepaid days"}
           </button>
         )}
       </div>

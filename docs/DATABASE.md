@@ -231,6 +231,17 @@ off or on (`POST /api/invoices/:id/packages`), which deletes and rebuilds only t
 (redemptions go with the deleted lines) and leaves lines added by hand. Invoices drafted before
 this migration have no stay lines marked, so their choice can't be changed.
 
+## 0018_memberships
+
+`membership_plans` (name, full or half days per month, monthly price), `customer_memberships` (a
+sign-up with the plan's terms copied; `started_on` is the billing day; cancelling sets `ends_on` to
+the last day of the paid month) and `membership_periods` (one per billed month, with its issued
+invoice; unique per membership and start date, so billing can be run again safely). Months bill on
+the sign-up day, or the last day of shorter months (`packages/shared/src/memberships.ts`), at full
+price. `package_redemptions` now records a day against either a package or a membership month
+(exactly one). Included days only cover daycare dates inside their month and don't roll over;
+membership days are used before packages. A month whose invoice is voided can't be used.
+
 ## Conventions
 
 - Money: `bigint` integer cents (see ADR 0003). Never `numeric` or float in application code.

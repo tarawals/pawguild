@@ -60,6 +60,9 @@ export async function seed(connectionString: string, password: string) {
         { organizationId: org.id, name: "10 Full Days", covers: "full_day", days: 10, priceCents: 34000, expiresAfterDays: 365 },
         { organizationId: org.id, name: "10 Half Days", covers: "half_day", days: 10, priceCents: 23000, expiresAfterDays: 365 },
       ]).execute();
+      await trx.insertInto("membershipPlans").values([
+        { organizationId: org.id, name: "Full-Day Club", covers: "full_day", daysPerMonth: 8, priceCents: 28000 },
+      ]).execute();
       // Typical requirements: daycare/boarding need core vaccines plus Bordetella; grooming needs Rabies.
       const requirement = (serviceId: string, species: string, vaccine: string) => ({ organizationId: org.id, serviceId, species, vaccine });
       await trx.insertInto("serviceVaccineRequirements").values(services.flatMap((s) =>

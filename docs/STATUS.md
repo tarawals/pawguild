@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-10-02 (session 17: billing rules and packages)_
+_Last updated: 2026-10-03 (session 18: memberships)_
 
 ## Built and tested
 
@@ -37,6 +37,7 @@ _Last updated: 2026-10-02 (session 17: billing rules and packages)_
 | **Recurring reservations** (same-day services on chosen weekdays between two dates, up to six months or 100 dates; preview runs the real booking checks per date and lists skipped dates with a short reason; times stay local across DST; "cancel this and following" with one reason) | ✅ | ✅ | `reservations:write` to book and cancel; `reservations:read` to view | "Repeat on a schedule" on the booking form; Repeating booking panel on reservations | unit + integration + e2e |
 | **Billing rules** (boarding per night with daytime included, per night plus daycare for daytime hours, or per 24 hours with extra time as another period or daycare; half-day limit; grace period; daytime window; full/half-day daycare services; additional-pet discount; live examples while editing) | ✅ | ✅ | view: signed in; change: `settings:manage` | Business settings → Billing rules; itemized estimates on the booking form and reservations | unit (engine) + integration (estimate = invoice) + e2e |
 | **Daycare packages** (applied automatically at checkout and on invoices from a stay, with "Don't use package" / "Use package" while the invoice is a draft; shows days used and days left with the use-by date; full-day or half-day packages; owner-set expiry or never; sold on an issued invoice; used automatically when daycare is invoiced, soonest-expiring first; days come back if the invoice is voided or the prepaid line removed; sale can't be voided once used) | ✅ | ✅ | set up: `settings:manage`; sell: `billing:write`; view: `billing:read` | Business settings → Daycare packages; Packages panel on customers | integration (incl. race, expiry, tenant isolation) + e2e |
+| **Memberships** (monthly plans with included full or half days; billed in full on the sign-up date, then the same day each month; included days used automatically before packages, only within their month, no roll-over; cancel runs to the end of the paid month and can be undone until then; "Bill due memberships" issues each month's invoice, safe to run again; notification when months are due) | ✅ | ✅ | plans: `settings:manage`; sign up, cancel, bill: `billing:write`; view: `billing:read` | Business settings → Membership plans; Memberships panel on customers; Memberships page | unit (billing dates) + integration + e2e |
 | **Sign-in throttling** (per email and per network address; same response for unknown emails) | ✅ | ✅ | — | Server message on sign-in page | integration |
 | **Session-ended handling** (back to sign-in with notice, then return to the same page; same-site redirects only) | — | — | — | ✅ | e2e |
 | Dashboard (outstanding balances and overpaid invoices, medication due/overdue, open incidents, occupancy today/tonight vs limits, today's arrivals/departures with one-click check-in/out, pets checked in, vaccine alerts; org-timezone "today") | — | summary | signed-in | ✅ | integration + e2e |
@@ -44,22 +45,21 @@ _Last updated: 2026-10-02 (session 17: billing rules and packages)_
 | Tenant isolation (RLS, composite FKs, least privilege) | ✅ | ✅ | — | — | integration |
 | Domain logic: money, pricing/billable quantity, reservation state machine | shared | — | — | — | unit |
 
-Latest check results (2026-10-02): typecheck ✅, 63 shared unit tests ✅, 206 API integration tests ✅,
-7 web tests ✅, 50 Playwright e2e tests ✅.
+Latest check results (2026-10-03): typecheck ✅, 66 shared unit tests ✅, 215 API integration tests ✅,
+7 web tests ✅, 52 Playwright e2e tests ✅ (two full runs in a row).
 Fixed this session: drafting an invoice from a reservation could deadlock with a booking at the same
 location (the invoice locked the service row). Row locks now use FOR NO KEY UPDATE throughout.
 
 ## Not built yet (in scope, by priority)
 
-1. Memberships (recurring monthly fees)
-2. More reports (e.g. tax by rate, staff activity), internal notifications, business settings UI
+1. More reports (memberships: active members, monthly revenue, days used) (e.g. tax by rate, staff activity), internal notifications, business settings UI
 3. Waitlists, pet photos
 
 ## Test coverage beyond feature tests
 
 - `auth-hardening.test.ts`: sign-in for every role, identical errors, cookie flags, expiry, revocation, tampering, deactivation, immediate role changes, injection attempts
 - `throttle.test.ts`: lockout per email and per address, reset on success, window expiry, no enumeration
-- `permissions-matrix.test.ts`: all 10 roles × 69 protected actions against the role map, and no action returns 500
+- `permissions-matrix.test.ts`: all 10 roles × 78 protected actions against the role map, and no action returns 500
 - `money-invariants.test.ts`: 40 randomized billing scenarios × 15 operations that must reconcile after every step, plus simultaneous-request races (payments, credit, refunds, invoice numbers, last capacity space, same pet)
 - `edge-cases.test.ts`: empty updates, markup/unicode, oversized input, unknown ids
 - Browser: `login.spec.ts` (every role, deep links, sign-out, session ending mid-use, safe redirects) and `full-day.spec.ts` (a full visit across three staff members)
@@ -111,7 +111,11 @@ location (the invoice locked the service row). Row locks now use FOR NO KEY UPDA
   half-day service when a full day was booked) uses its current price.
 - Package revenue is recognized when the package is sold (the sale invoice); days used appear as
   $0 prepaid lines. A full-day package doesn't cover half days, and vice versa.
-- Packages cover daycare only (including daycare charged during boarding), not boarding nights.
+- Packages and memberships cover daycare only (including daycare charged during boarding), not boarding nights.
+- Membership renewals aren't billed automatically in the background: staff run "Bill due memberships"
+  (a notification says when months are due). Each month is a separate invoice to collect, since the
+  app takes no card payments. A membership's days for next month exist only once that month is billed.
+- A membership can't be changed to another plan in place: cancel and sign up again.
 - Notifications have no read or snooze state: an item stays until the problem is resolved. There is
   no email, text or push delivery (in-app only, per current scope).
 - Changing the business time zone doesn't move existing bookings (they keep their exact times),
@@ -130,8 +134,7 @@ location (the invoice locked the service row). Row locks now use FOR NO KEY UPDA
 
 ## Next recommended step
 
-**Memberships:** a recurring monthly fee with a set number of included daycare days (used like a
-package that refills each month). Needs decisions first: the billing day (sign-up date or the 1st),
-whether the first month is prorated, whether unused days roll over, and how cancellation works
-(end of the paid month or immediately with a partial refund). No card payments are taken in the
-app (current scope), so each month's invoice would be issued for staff to collect.
+**Membership and package reporting, then a review pass:** add memberships to Reports (active
+members, monthly recurring revenue, included days used vs. available, cancellations). Then a
+broad review of the whole app (security review of the newest billing code, accessibility check of
+the newest pages, and a hands-on pass through a full day as each role) before adding more features.
